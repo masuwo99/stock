@@ -631,7 +631,7 @@
   <script>
     /**
      * StockPal メインスクリプト
-     * GitHub Pages・ローカルファイル・Canvas環境すべてで安全に動作する耐障害性設計
+     * すべての操作関数を完全実装し、グローバル公開＆重複排除
      */
 
     const API_KEY = ""; // Canvas環境で自動注入。直接利用時は任意設定可能
@@ -644,7 +644,7 @@
       freezer: { name: '冷凍庫', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: 'fa-cube', border: 'border-l-purple-500' }
     };
 
-    // 初期サンプルデータ
+    // 初期サンプルデータ用日付生成
     function getRelativeDate(offsetDays) {
       const d = new Date();
       d.setDate(d.getDate() + offsetDays);
@@ -684,7 +684,7 @@
       return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
     }
 
-    // --- 安全なストレージ同期 ---
+    // --- ストレージ同期 ---
     function loadSavedItems() {
       try {
         const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -706,26 +706,16 @@
       }
     }
 
-    // --- 安全な初期化エントリーポイント ---
+    // --- 初期化エントリーポイント ---
     function initApp() {
       try {
-        // 1. ルームIDの初期化 (SecurityError例外ガード)
         initRoom();
-
-        // 2. データの復元
         items = loadSavedItems();
-
-        // 3. UIの即時描画（何があっても真っ白にさせない）
         render();
-
-        // 4. イベントリスナー登録
         setupEventListeners();
-
-        // 5. リアルタイム通信（バックグラウンド非同期）
         setTimeout(connectSyncEngine, 100);
       } catch (err) {
         console.error("Critical init error:", err);
-        // 最低限のフォールバック描画
         items = [...INITIAL_ITEMS];
         render();
       }
@@ -766,7 +756,6 @@
       if (statCode) statCode.textContent = currentRoomId;
       if (inputRoom) inputRoom.value = currentRoomId;
 
-      // QRコード画像（外部API）
       try {
         const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`;
@@ -874,158 +863,222 @@
       }
     }
 
-    // --- UI イベントリスナー登録 ---
-    function setupEventListeners() {
-      // 室別タブ
-      document.querySelectorAll('.compartment-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.compartment-tab').forEach(b => {
-            b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-            b.classList.add('text-slate-600', 'hover:bg-slate-100');
-          });
-          btn.classList.add('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-          btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
-
-          currentFilterCompartment = btn.dataset.compartment;
-          render();
-        });
-      });
-
-      // 検索・ソート
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-          searchQuery = e.target.value.trim().toLowerCase();
-          render();
-        });
-      }
-
-      const sortSelect = document.getElementById('sortSelect');
-      if (sortSelect) {
-        sortSelect.addEventListener('change', (e) => {
-          sortMode = e.target.value;
-          render();
-        });
-      }
-
-      // モーダルクローズ
-      document.querySelectorAll('.btn-close-modal').forEach(btn => {
-        btn.addEventListener('click', closeAllModals);
-      });
-
-      // 追加ボタン
-      const btnAdd = document.getElementById('btnOpenAddModal');
-      if (btnAdd) btnAdd.addEventListener('click', () => openItemModal());
-
-      const btnEmptyAdd = document.getElementById('btnEmptyAdd');
-      if (btnEmptyAdd) btnEmptyAdd.addEventListener('click', () => openItemModal());
-
-      // アイテム保存
-      const itemForm = document.getElementById('itemForm');
-      if (itemForm) {
-        itemForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          saveItemFromForm();
-        });
-      }
-
-      // 共有モーダル
-      const btnShare = document.getElementById('btnShareModal');
-      if (btnShare) {
-        btnShare.addEventListener('click', () => {
-          const m = document.getElementById('shareModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnCopy = document.getElementById('btnCopyShareUrl');
-      if (btnCopy) {
-        btnCopy.addEventListener('click', () => {
-          const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
-          copyToClipboard(shareUrl);
-          showToast('共有リンクをクリップボードにコピーしました！', 'success');
-        });
-      }
-
-      const btnJoin = document.getElementById('btnJoinRoom');
-      if (btnJoin) {
-        btnJoin.addEventListener('click', () => {
-          const newRoom = document.getElementById('inputJoinRoomId').value.trim();
-          if (newRoom) {
-            window.location.hash = `#room=${newRoom}`;
-            window.location.reload();
-          }
-        });
-      }
-
-      // レシートモーダル
-      const btnReceipt = document.getElementById('btnOpenReceiptModal');
-      if (btnReceipt) {
-        btnReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnEmptyReceipt = document.getElementById('btnEmptyReceipt');
-      if (btnEmptyReceipt) {
-        btnEmptyReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnSelect = document.getElementById('btnSelectFile');
-      const fileInput = document.getElementById('receiptFileInput');
-      if (btnSelect && fileInput) {
-        btnSelect.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (file) handleReceiptFile(file);
-        });
-      }
-
-      const btnTestReceipt = document.getElementById('btnTestReceipt');
-      if (btnTestReceipt) {
-        btnTestReceipt.addEventListener('click', simulateReceiptScanning);
-      }
-
-      const btnCancelReceipt = document.getElementById('btnCancelReceipt');
-      if (btnCancelReceipt) {
-        btnCancelReceipt.addEventListener('click', resetReceiptModal);
-      }
-
-      const btnAddDetected = document.getElementById('btnAddAllDetectedItems');
-      if (btnAddDetected) {
-        btnAddDetected.addEventListener('click', commitDetectedReceiptItems);
-      }
-
-      // 献立モーダル
-      const btnMeal = document.getElementById('btnOpenMealModal');
-      if (btnMeal) {
-        btnMeal.addEventListener('click', () => {
-          const m = document.getElementById('mealModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnGenMeal = document.getElementById('btnGenerateMealPlan');
-      if (btnGenMeal) {
-        btnGenMeal.addEventListener('click', generateMealPlanWithGemini);
-      }
-    }
-
+    // --- モーダル制御 ---
     function closeAllModals() {
       document.querySelectorAll('#itemModal, #receiptModal, #mealModal, #shareModal').forEach(m => {
         m.classList.add('hidden');
         m.classList.remove('flex');
       });
+    }
+
+    // 1. アイテム追加/編集モーダルを開く
+    function openItemModal(itemId = null) {
+      const form = document.getElementById('itemForm');
+      if (!form) return;
+      form.reset();
+
+      const titleEl = document.getElementById('itemModalTitle');
+      const idInput = document.getElementById('itemId');
+
+      if (itemId) {
+        const item = items.find(i => i.id === itemId);
+        if (!item) return;
+
+        if (titleEl) titleEl.textContent = 'ストックを編集';
+        if (idInput) idInput.value = item.id;
+
+        const radio = form.querySelector(`input[name="itemCompartment"][value="${item.compartment}"]`);
+        if (radio) radio.checked = true;
+
+        document.getElementById('itemName').value = item.name || '';
+        document.getElementById('itemQuantity').value = item.quantity ?? 1;
+        document.getElementById('itemUnit').value = item.unit || '個';
+        document.getElementById('itemExpiryType').value = item.expiryType || '賞味期限';
+        document.getElementById('itemExpiryDate').value = item.expiryDate || '';
+        document.getElementById('itemPurchaseDate').value = item.purchaseDate || getRelativeDate(0);
+        document.getElementById('itemMemo').value = item.memo || '';
+      } else {
+        if (titleEl) titleEl.textContent = 'ストックを追加';
+        if (idInput) idInput.value = '';
+
+        const defaultRadio = form.querySelector('input[name="itemCompartment"][value="fridge"]');
+        if (defaultRadio) defaultRadio.checked = true;
+
+        document.getElementById('itemName').value = '';
+        document.getElementById('itemQuantity').value = '1';
+        document.getElementById('itemUnit').value = '個';
+        document.getElementById('itemExpiryType').value = '賞味期限';
+        document.getElementById('itemExpiryDate').value = getRelativeDate(3);
+        document.getElementById('itemPurchaseDate').value = getRelativeDate(0);
+        document.getElementById('itemMemo').value = '';
+      }
+
+      const modal = document.getElementById('itemModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    // 2. フォームからアイテム保存
+    function saveItemFromForm() {
+      const idInput = document.getElementById('itemId');
+      const editId = idInput ? idInput.value.trim() : '';
+
+      const form = document.getElementById('itemForm');
+      const compartment = form.querySelector('input[name="itemCompartment"]:checked')?.value || 'fridge';
+      const name = document.getElementById('itemName').value.trim();
+      const quantity = parseFloat(document.getElementById('itemQuantity').value) || 1;
+      const unit = document.getElementById('itemUnit').value;
+      const expiryType = document.getElementById('itemExpiryType').value;
+      const expiryDate = document.getElementById('itemExpiryDate').value;
+      const purchaseDate = document.getElementById('itemPurchaseDate').value || getRelativeDate(0);
+      const memo = document.getElementById('itemMemo').value.trim();
+
+      if (!name) {
+        showToast('品目名を入力してください', 'error');
+        return;
+      }
+      if (!expiryDate) {
+        showToast('期限日を入力してください', 'error');
+        return;
+      }
+
+      if (editId) {
+        const idx = items.findIndex(i => i.id === editId);
+        if (idx !== -1) {
+          const updated = {
+            ...items[idx],
+            name,
+            compartment,
+            quantity,
+            unit,
+            expiryType,
+            expiryDate,
+            purchaseDate,
+            memo,
+            updatedAt: Date.now()
+          };
+          items[idx] = updated;
+          persistItemsLocally();
+          broadcastSyncEvent({ type: 'ITEM_UPDATED', item: updated });
+          showToast(`「${name}」を更新しました`, 'success');
+        }
+      } else {
+        const newItem = {
+          id: 'item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          name,
+          compartment,
+          quantity,
+          unit,
+          expiryType,
+          expiryDate,
+          purchaseDate,
+          memo,
+          updatedAt: Date.now()
+        };
+        items.unshift(newItem);
+        persistItemsLocally();
+        broadcastSyncEvent({ type: 'ITEM_ADDED', item: newItem });
+        showToast(`「${name}」を追加しました`, 'success');
+      }
+
+      closeAllModals();
+      render();
+    }
+
+    // 3. 食材の数量増減ボタン (+/-)
+    function changeQuantity(itemId, delta) {
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+
+      const current = parseFloat(item.quantity) || 0;
+      const next = Math.max(0, Math.round((current + delta) * 10) / 10);
+      item.quantity = next;
+      item.updatedAt = Date.now();
+
+      persistItemsLocally();
+      render();
+      broadcastSyncEvent({ type: 'ITEM_UPDATED', item });
+    }
+    // グローバルから呼べるよう明示バインド
+    window.changeQuantity = changeQuantity;
+
+    // 4. 食材の編集ボタン
+    function editItem(itemId) {
+      openItemModal(itemId);
+    }
+    window.editItem = editItem;
+
+    // 5. 食材の使い切ったボタン
+    function consumeItem(itemId) {
+      const item = items.find(i => i.id === itemId);
+      const name = item ? item.name : '食材';
+
+      items = items.filter(i => i.id !== itemId);
+      persistItemsLocally();
+      render();
+      broadcastSyncEvent({ type: 'ITEM_DELETED', id: itemId });
+      showToast(`「${name}」を使い切りました！`, 'success');
+    }
+    window.consumeItem = consumeItem;
+
+    // 6. 一覧ボタン（ナビゲーション）
+    function navigateHome() {
+      closeAllModals();
+
+      currentFilterCompartment = 'all';
+      document.querySelectorAll('.compartment-tab').forEach(b => {
+        if (b.dataset.compartment === 'all') {
+          b.classList.add('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
+          b.classList.remove('text-slate-600', 'hover:bg-slate-100');
+        } else {
+          b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
+          b.classList.add('text-slate-600', 'hover:bg-slate-100');
+        }
+      });
+
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        searchInput.value = '';
+        searchQuery = '';
+      }
+
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 7. レシートモーダルのリセット
+    function resetReceiptModal() {
+      const dropZone = document.getElementById('receiptDropZone');
+      const scanningView = document.getElementById('receiptScanningView');
+      const resultView = document.getElementById('receiptResultView');
+      const fileInput = document.getElementById('receiptFileInput');
+
+      if (dropZone) dropZone.classList.remove('hidden');
+      if (scanningView) scanningView.classList.add('hidden');
+      if (resultView) resultView.classList.add('hidden');
+      if (fileInput) fileInput.value = '';
+
+      detectedReceiptItems = [];
+    }
+
+    // 8. レシート画像の読み込み処理
+    async function handleReceiptFile(file) {
+      if (!file) return;
+
+      const dropZone = document.getElementById('receiptDropZone');
+      const scanningView = document.getElementById('receiptScanningView');
+      if (dropZone) dropZone.classList.add('hidden');
+      if (scanningView) scanningView.classList.remove('hidden');
+
+      try {
+        const base64Data = await fileToBase64(file);
+        await analyzeReceiptWithGemini(base64Data, file.type || 'image/jpeg');
+      } catch (err) {
+        console.warn('レシート解析API処理中に通知、テスト用解析で補完します:', err);
+        simulateReceiptScanning();
+      }
     }
 
     // --- 描画処理 ---
@@ -1147,7 +1200,7 @@
           </div>
         </div>
 
-        <!-- 操作ボタン群（スマホ片手でもタップしやすいようサイズ拡大） -->
+        <!-- 操作ボタン群（増減・編集・使い切り） -->
         <div class="flex items-center justify-between pt-2 border-t border-slate-100 gap-1">
           <div class="flex items-center space-x-1.5">
             <button type="button" onclick="changeQuantity('${item.id}', -1)" title="1つ減らす" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
@@ -1171,9 +1224,10 @@
 
       return card;
     }
-    // --- UI イベントリスナー登録 ---
+
+    // --- イベントリスナーの一元管理 ---
     function setupEventListeners() {
-      // 室別タブ
+      // 1. 各室タブ
       document.querySelectorAll('.compartment-tab').forEach(btn => {
         btn.addEventListener('click', () => {
           document.querySelectorAll('.compartment-tab').forEach(b => {
@@ -1188,24 +1242,26 @@
         });
       });
 
-      // モバイル下部固定ナビゲーションバーのイベント
+      // 2. モバイル下部固定ナビゲーションバー
       const btnNavHome = document.getElementById('btnNavHome');
       if (btnNavHome) {
-        btnNavHome.addEventListener('click', () => {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
+        btnNavHome.addEventListener('click', navigateHome);
       }
 
       const btnNavAdd = document.getElementById('btnNavAdd');
-      if (btnNavAdd) btnNavAdd.addEventListener('click', () => openItemModal());
+      if (btnNavAdd) {
+        btnNavAdd.addEventListener('click', () => openItemModal());
+      }
 
       const btnNavReceipt = document.getElementById('btnNavReceipt');
       if (btnNavReceipt) {
         btnNavReceipt.addEventListener('click', () => {
           resetReceiptModal();
           const m = document.getElementById('receiptModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
         });
       }
 
@@ -1213,8 +1269,10 @@
       if (btnNavMeal) {
         btnNavMeal.addEventListener('click', () => {
           const m = document.getElementById('mealModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
         });
       }
 
@@ -1222,12 +1280,50 @@
       if (btnNavShare) {
         btnNavShare.addEventListener('click', () => {
           const m = document.getElementById('shareModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
         });
       }
 
-      // モーダル内数量ステッパー (+/-)
+      // 3. デスクトップ＆汎用追加ボタン
+      const btnOpenAdd = document.getElementById('btnOpenAddModal');
+      if (btnOpenAdd) {
+        btnOpenAdd.addEventListener('click', () => openItemModal());
+      }
+
+      const btnEmptyAdd = document.getElementById('btnEmptyAdd');
+      if (btnEmptyAdd) {
+        btnEmptyAdd.addEventListener('click', () => openItemModal());
+      }
+
+      // 4. レシートモーダルを開くボタン
+      const btnOpenReceipt = document.getElementById('btnOpenReceiptModal');
+      if (btnOpenReceipt) {
+        btnOpenReceipt.addEventListener('click', () => {
+          resetReceiptModal();
+          const m = document.getElementById('receiptModal');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
+        });
+      }
+
+      const btnEmptyReceipt = document.getElementById('btnEmptyReceipt');
+      if (btnEmptyReceipt) {
+        btnEmptyReceipt.addEventListener('click', () => {
+          resetReceiptModal();
+          const m = document.getElementById('receiptModal');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
+        });
+      }
+
+      // 5. モーダル内数量ステッパー (+/-)
       const modalQtyInput = document.getElementById('itemQuantity');
       const btnModalQtyMinus = document.getElementById('btnModalQtyMinus');
       const btnModalQtyPlus = document.getElementById('btnModalQtyPlus');
@@ -1244,7 +1340,7 @@
         });
       }
 
-      // 単位クイックチップのタップ
+      // 6. 単位クイックチップ
       document.querySelectorAll('.unit-chip').forEach(btn => {
         btn.addEventListener('click', () => {
           const unitSelect = document.getElementById('itemUnit');
@@ -1252,7 +1348,7 @@
         });
       });
 
-      // 賞味期限クイック選択チップ
+      // 7. 賞味期限クイック選択チップ
       document.querySelectorAll('.expiry-chip').forEach(btn => {
         btn.addEventListener('click', () => {
           const offset = parseInt(btn.dataset.offset, 10);
@@ -1261,7 +1357,7 @@
         });
       });
 
-      // 購入日クイック選択チップ
+      // 8. 購入日クイック選択チップ
       document.querySelectorAll('.purchase-chip').forEach(btn => {
         btn.addEventListener('click', () => {
           const offset = parseInt(btn.dataset.offset, 10);
@@ -1270,7 +1366,7 @@
         });
       });
 
-      // 検索・ソート
+      // 9. 検索・ソート
       const searchInput = document.getElementById('searchInput');
       if (searchInput) {
         searchInput.addEventListener('input', (e) => {
@@ -1287,19 +1383,12 @@
         });
       }
 
-      // モーダルクローズ
+      // 10. モーダル閉じるボタン
       document.querySelectorAll('.btn-close-modal').forEach(btn => {
         btn.addEventListener('click', closeAllModals);
       });
 
-      // 追加ボタン
-      const btnAdd = document.getElementById('btnOpenAddModal');
-      if (btnAdd) btnAdd.addEventListener('click', () => openItemModal());
-
-      const btnEmptyAdd = document.getElementById('btnEmptyAdd');
-      if (btnEmptyAdd) btnEmptyAdd.addEventListener('click', () => openItemModal());
-
-      // アイテム保存
+      // 11. アイテム保存フォーム
       const itemForm = document.getElementById('itemForm');
       if (itemForm) {
         itemForm.addEventListener('submit', (e) => {
@@ -1308,57 +1397,7 @@
         });
       }
 
-      // 共有モーダル
-      const btnShare = document.getElementById('btnShareModal');
-      if (btnShare) {
-        btnShare.addEventListener('click', () => {
-          const m = document.getElementById('shareModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnCopy = document.getElementById('btnCopyShareUrl');
-      if (btnCopy) {
-        btnCopy.addEventListener('click', () => {
-          const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
-          copyToClipboard(shareUrl);
-          showToast('共有リンクをクリップボードにコピーしました！', 'success');
-        });
-      }
-
-      const btnJoin = document.getElementById('btnJoinRoom');
-      if (btnJoin) {
-        btnJoin.addEventListener('click', () => {
-          const newRoom = document.getElementById('inputJoinRoomId').value.trim();
-          if (newRoom) {
-            window.location.hash = `#room=${newRoom}`;
-            window.location.reload();
-          }
-        });
-      }
-
-      // レシートモーダル
-      const btnReceipt = document.getElementById('btnOpenReceiptModal');
-      if (btnReceipt) {
-        btnReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
-      const btnEmptyReceipt = document.getElementById('btnEmptyReceipt');
-      if (btnEmptyReceipt) {
-        btnEmptyReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
-        });
-      }
-
+      // 12. レシート撮影・ファイル選択
       const btnSelect = document.getElementById('btnSelectFile');
       const fileInput = document.getElementById('receiptFileInput');
       if (btnSelect && fileInput) {
@@ -1384,13 +1423,15 @@
         btnAddDetected.addEventListener('click', commitDetectedReceiptItems);
       }
 
-      // 献立モーダル
-      const btnMeal = document.getElementById('btnOpenMealModal');
-      if (btnMeal) {
-        btnMeal.addEventListener('click', () => {
+      // 13. 献立モーダル関連
+      const btnOpenMeal = document.getElementById('btnOpenMealModal');
+      if (btnOpenMeal) {
+        btnOpenMeal.addEventListener('click', () => {
           const m = document.getElementById('mealModal');
-          m.classList.remove('hidden');
-          m.classList.add('flex');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
         });
       }
 
@@ -1398,8 +1439,41 @@
       if (btnGenMeal) {
         btnGenMeal.addEventListener('click', generateMealPlanWithGemini);
       }
+
+      // 14. 共有関連
+      const btnShare = document.getElementById('btnShareModal');
+      if (btnShare) {
+        btnShare.addEventListener('click', () => {
+          const m = document.getElementById('shareModal');
+          if (m) {
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+          }
+        });
+      }
+
+      const btnCopy = document.getElementById('btnCopyShareUrl');
+      if (btnCopy) {
+        btnCopy.addEventListener('click', () => {
+          const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
+          copyToClipboard(shareUrl);
+          showToast('共有リンクをクリップボードにコピーしました！', 'success');
+        });
+      }
+
+      const btnJoin = document.getElementById('btnJoinRoom');
+      if (btnJoin) {
+        btnJoin.addEventListener('click', () => {
+          const newRoom = document.getElementById('inputJoinRoomId').value.trim();
+          if (newRoom) {
+            window.location.hash = `#room=${newRoom}`;
+            window.location.reload();
+          }
+        });
+      }
     }
 
+    // --- レシート画像変換 & Gemini解析 ---
     function fileToBase64(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1462,8 +1536,10 @@
     }
 
     function simulateReceiptScanning() {
-      document.getElementById('receiptDropZone').classList.add('hidden');
-      document.getElementById('receiptScanningView').classList.remove('hidden');
+      const dropZone = document.getElementById('receiptDropZone');
+      const scanningView = document.getElementById('receiptScanningView');
+      if (dropZone) dropZone.classList.add('hidden');
+      if (scanningView) scanningView.classList.remove('hidden');
 
       setTimeout(() => {
         const dummyResult = {
@@ -1637,7 +1713,7 @@
         const plan = JSON.parse(resData.candidates[0].content.parts[0].text);
         renderMealPlan(plan);
       } catch (err) {
-        console.warn('Gemini API call failed, providing balanced fallback meal:', err);
+        console.warn('Gemini API call fallback:', err);
         renderFallbackMealPlan();
       } finally {
         document.getElementById('mealLoading').classList.add('hidden');
