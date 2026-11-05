@@ -1,42 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>StockPal - スマート冷蔵庫ストック管理</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Google Fonts & Font Awesome Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <script>
-    try {
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['"M PLUS Rounded 1c"', 'Inter', 'sans-serif'],
-            },
-            colors: {
-              fridge: '#3b82f6',
-              chilled: '#06b6d4',
-              vegetable: '#10b981',
-              freezer: '#8b5cf6',
-            }
-          }
-        }
-      };
-    } catch(e) {
-      console.warn("Tailwind config warning:", e);
-    }
-  </script>
-
+<!-- ... existing code ... -->
   <style>
     /* モバイル最適化基本スタイル */
     html, body {
@@ -47,7 +9,8 @@
       font-family: "M PLUS Rounded 1c", "Inter", sans-serif;
       min-height: 100vh;
       -webkit-tap-highlight-color: transparent;
-      overscroll-behavior-y: none;
+      /* Safariの引っ張って更新（Pull-to-refresh）を許可 */
+      overscroll-behavior-y: auto;
     }
     
     /* ボタン連打時のiOS Safariによるダブルタップズーム・長押しテキスト選択を徹底抑止 */
@@ -58,624 +21,40 @@
       user-select: none;
     }
 
+    /* Pull to Refresh インジケーターのスタイル */
+    #pullIndicator {
+      transition: transform 0.2s cubic-bezier(0,0,0.2,1), opacity 0.2s ease;
+      will-change: transform, opacity;
+    }
+
     /* iOS Safari で入力欄フォーカス時に画面が勝手にズームするのを防止（16px以上維持） */
-    @media (max-width: 640px) {
-      input, select, textarea {
-        font-size: 16px !important;
-      }
-    }
-
-    /* iPhoneなどのセーフエリア対応（ノッチ・ホームバー対応） */
-    .pb-safe {
-      padding-bottom: env(safe-area-inset-bottom, 1rem);
-    }
-
-    .glass-effect {
-      background: rgba(255, 255, 255, 0.96);
-      backdrop-filter: blur(14px);
-    }
-    
-    .badge-pulse {
-      animation: pulseAlert 2s infinite ease-in-out;
-    }
-    @keyframes pulseAlert {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.04); }
-    }
-
-    /* 横スクロールタブのスクロールバー非表示 */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-    /* モバイル入力シートのスクロールスムーズ化 */
-    .smooth-scroll-touch {
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
-    }
-  </style>
+<!-- ... existing code ... -->
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
 
+  <!-- Pull-to-Refresh アプリ内インジケーター（下に引っ張った時のフィードバック） -->
+  <div id="pullIndicator" class="fixed top-2 inset-x-0 mx-auto w-36 py-1.5 px-3 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-full shadow-md z-50 flex items-center justify-center space-x-2 text-xs font-bold text-slate-700 pointer-events-none opacity-0 -translate-y-12">
+    <i id="pullIcon" class="fa-solid fa-arrow-down text-blue-500 transition-transform duration-200"></i>
+    <span id="pullText">引いて同期</span>
+  </div>
+
   <!-- ヘッダー -->
   <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <!-- ロゴ -->
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-teal-500 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-          <i class="fa-solid fa-kitchen-set text-lg"></i>
-        </div>
-        <div>
-          <div class="flex items-center space-x-2">
-            <h1 class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-blue-700 to-teal-600 bg-clip-text text-transparent">StockPal</h1>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">AI搭載</span>
-          </div>
-          <p class="text-xs text-slate-500 hidden sm:block">冷蔵庫ストック管理 & リアルタイム共有</p>
-        </div>
-      </div>
-
-      <!-- 同期ステータス ＆ アクション -->
-      <div class="flex items-center space-x-2 sm:space-x-3">
-        <!-- リアルタイム同期ボタン / ステータス -->
-        <button type="button" id="btnShareModal" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-slate-200 hover:border-blue-400 bg-white text-slate-700 shadow-xs text-xs font-semibold active:scale-95 transition">
-          <span id="syncIndicator" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span id="syncStatusText" class="hidden sm:inline">同期中</span>
-          <i class="fa-solid fa-users text-blue-600"></i>
-        </button>
-
-        <!-- デスクトップ用レシート読み取りボタン -->
-        <button type="button" id="btnOpenReceiptModal" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs text-xs sm:text-sm font-bold active:scale-95 transition">
-          <i class="fa-solid fa-receipt"></i>
-          <span>レシート読取</span>
-        </button>
-
-        <!-- デスクトップ用献立提案ボタン -->
-        <button type="button" id="btnOpenMealModal" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-xs text-xs sm:text-sm font-bold active:scale-95 transition">
-          <i class="fa-solid fa-wand-magic-sparkles"></i>
-          <span>AI献立</span>
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- メインコンテンツ -->
-  <main class="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 pb-28 sm:pb-8 space-y-4 sm:space-y-6">
-
-    <!-- アラート・ステータスサマリーカード -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-      <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base shrink-0">
-          <i class="fa-solid fa-boxes-stacked"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[11px] text-slate-500 font-medium truncate">ストック総数</p>
-          <p id="statTotalItems" class="text-lg sm:text-xl font-extrabold text-slate-800">0</p>
-        </div>
-      </div>
-      <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-base shrink-0">
-          <i class="fa-solid fa-clock text-amber-500"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[11px] text-slate-500 font-medium truncate">3日以内期限</p>
-          <p id="statExpiringSoon" class="text-lg sm:text-xl font-extrabold text-amber-600">0</p>
-        </div>
-      </div>
-      <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-base shrink-0">
-          <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[11px] text-slate-500 font-medium truncate">期限切れ</p>
-          <p id="statExpired" class="text-lg sm:text-xl font-extrabold text-rose-600">0</p>
-        </div>
-      </div>
-      <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-2.5">
-        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-base shrink-0">
-          <i class="fa-solid fa-house-signal text-emerald-500"></i>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[11px] text-slate-500 font-medium truncate">共有ルーム</p>
-          <p id="statRoomCode" class="text-[11px] sm:text-xs font-mono font-bold text-slate-700 truncate">Room-XXXX</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 冷蔵庫各室セレクター (スワイプ可能な横スクロールタブ) -->
-    <div class="bg-white p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 shadow-xs">
-      <div class="flex items-center overflow-x-auto gap-1.5 sm:gap-2 p-0.5 no-scrollbar" id="compartmentTabs">
-        <button type="button" data-compartment="all" class="compartment-tab shrink-0 py-2.5 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm font-bold transition bg-blue-600 text-white shadow-xs shadow-blue-500/20 active:scale-95">
-          <i class="fa-solid fa-border-all"></i>
-          <span>すべて (<span id="count-all">0</span>)</span>
-        </button>
-        <button type="button" data-compartment="fridge" class="compartment-tab shrink-0 py-2.5 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm font-bold transition text-slate-600 hover:bg-slate-100 active:scale-95">
-          <i class="fa-solid fa-snowflake text-blue-500"></i>
-          <span>冷蔵室 (<span id="count-fridge">0</span>)</span>
-        </button>
-        <button type="button" data-compartment="chilled" class="compartment-tab shrink-0 py-2.5 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm font-bold transition text-slate-600 hover:bg-slate-100 active:scale-95">
-          <i class="fa-solid fa-icicles text-cyan-500"></i>
-          <span>チルド室 (<span id="count-chilled">0</span>)</span>
-        </button>
-        <button type="button" data-compartment="vegetable" class="compartment-tab shrink-0 py-2.5 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm font-bold transition text-slate-600 hover:bg-slate-100 active:scale-95">
-          <i class="fa-solid fa-carrot text-emerald-500"></i>
-          <span>野菜室 (<span id="count-vegetable">0</span>)</span>
-        </button>
-        <button type="button" data-compartment="freezer" class="compartment-tab shrink-0 py-2.5 px-3.5 rounded-xl flex items-center justify-center space-x-1.5 text-xs sm:text-sm font-bold transition text-slate-600 hover:bg-slate-100 active:scale-95">
-          <i class="fa-solid fa-cube text-purple-500"></i>
-          <span>冷凍庫 (<span id="count-freezer">0</span>)</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- 検索バー・ソート・追加ボタン -->
-    <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-center justify-between">
-      <div class="flex flex-1 gap-2 items-center">
-        <!-- 検索入力 -->
-        <div class="relative flex-1">
-          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input type="text" id="searchInput" placeholder="食材を検索..." class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200/80 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs">
-        </div>
-        <!-- ソート選択 -->
-        <select id="sortSelect" class="bg-white border border-slate-200/80 rounded-xl px-2.5 py-2.5 text-xs sm:text-sm text-slate-700 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs shrink-0">
-          <option value="expiry_asc">期限が近い順</option>
-          <option value="expiry_desc">期限が遠い順</option>
-          <option value="purchase_desc">購入日が新しい順</option>
-          <option value="name_asc">名前順 (A-Z)</option>
-        </select>
-      </div>
-
-      <!-- デスクトップ用ストック追加ボタン -->
-      <button type="button" id="btnOpenAddModal" class="hidden sm:flex px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/25 items-center justify-center space-x-2 font-bold text-sm transition active:scale-95 cursor-pointer">
-        <i class="fa-solid fa-plus"></i>
-        <span>手動でストック追加</span>
-      </button>
-    </div>
-
-    <!-- ストック一覧カードグリッド -->
-    <div id="stockGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-      <!-- JavaScriptで動的生成 -->
-    </div>
-
-    <!-- 空状態メッセージ -->
-    <div id="emptyState" class="hidden flex flex-col items-center justify-center py-12 px-4 text-center bg-white rounded-3xl border border-dashed border-slate-300">
-      <div class="w-16 h-16 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-2xl mb-3">
-        <i class="fa-solid fa-basket-shopping"></i>
-      </div>
-      <h3 class="text-sm font-bold text-slate-700">ストックが見つかりません</h3>
-      <p class="text-xs text-slate-500 max-w-xs mt-1">下の「＋」ボタンやレシート撮影から食材を登録してみましょう！</p>
-      <div class="mt-4 flex gap-2">
-        <button type="button" id="btnEmptyAdd" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow hover:bg-blue-700 transition active:scale-95">
-          <i class="fa-solid fa-plus mr-1"></i>ストック追加
-        </button>
-        <button type="button" id="btnEmptyReceipt" class="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow hover:bg-amber-600 transition active:scale-95">
-          <i class="fa-solid fa-receipt mr-1"></i>レシート読み取り
-        </button>
-      </div>
-    </div>
-  </main>
-
-  <!-- ======================== モバイル専用：固定ボトムバー & FAB ======================== -->
-  <nav class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-4 py-2 pb-safe shadow-lg flex items-center justify-between">
-    <!-- ホーム -->
-    <button type="button" id="btnNavHome" class="flex flex-col items-center justify-center text-blue-600 w-12 py-1 active:scale-90 transition">
-      <i class="fa-solid fa-kitchen-set text-lg"></i>
-      <span class="text-[10px] font-bold mt-0.5">一覧</span>
-    </button>
-
-    <!-- レシートスキャン -->
-    <button type="button" id="btnNavReceipt" class="flex flex-col items-center justify-center text-amber-600 w-12 py-1 active:scale-90 transition">
-      <i class="fa-solid fa-receipt text-lg"></i>
-      <span class="text-[10px] font-bold mt-0.5">レシート</span>
-    </button>
-
-    <!-- 中央の大きな追加 FAB -->
-    <button type="button" id="btnNavAdd" class="-mt-6 w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/40 active:scale-90 transition cursor-pointer border-4 border-white">
-      <i class="fa-solid fa-plus text-2xl"></i>
-    </button>
-
-    <!-- AI献立 -->
-    <button type="button" id="btnNavMeal" class="flex flex-col items-center justify-center text-teal-600 w-12 py-1 active:scale-90 transition">
-      <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
-      <span class="text-[10px] font-bold mt-0.5">AI献立</span>
-    </button>
-
-    <!-- 共有 -->
-    <button type="button" id="btnNavShare" class="flex flex-col items-center justify-center text-slate-600 w-12 py-1 active:scale-90 transition">
-      <i class="fa-solid fa-users text-lg"></i>
-      <span class="text-[10px] font-bold mt-0.5">共有</span>
-    </button>
-  </nav>
-
-  <!-- ======================== モーダル群 ======================== -->
-
-  <!-- 1. アイテム追加 / 編集モーダル（iOSキーボード見切れ対策：外枠overflow-hidden、1行4室セグメントUI） -->
-  <div id="itemModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
-      <!-- 固定ヘッダー -->
-      <div class="px-5 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-box-archive text-base"></i>
-          <h3 id="itemModalTitle" class="font-extrabold text-sm sm:text-base">ストックを追加</h3>
-        </div>
-        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-xl p-1.5 active:scale-90 transition">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <!-- フォーム（唯一のスクロールコンテナ・iPhone対応で十分な下部パディングを確保） -->
-      <form id="itemForm" class="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain pb-32 smooth-scroll-touch">
-        <input type="hidden" id="itemId">
-
-        <!-- 保管場所（省スペースな1行4室セグメント：キーボード表示時でも見切れない） -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1.5">
-            <i class="fa-solid fa-door-closed text-blue-500 mr-1"></i>保管場所（冷蔵庫各室）
-          </label>
-          <div class="grid grid-cols-4 gap-1.5">
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-blue-50/50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:text-blue-700 transition flex flex-col items-center justify-center">
-              <input type="radio" name="itemCompartment" value="fridge" class="sr-only" checked>
-              <i class="fa-solid fa-snowflake text-blue-500 text-sm mb-0.5"></i>
-              <span class="text-[11px] font-extrabold">冷蔵室</span>
-            </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-cyan-50/50 has-[:checked]:border-cyan-600 has-[:checked]:bg-cyan-50 has-[:checked]:text-cyan-700 transition flex flex-col items-center justify-center">
-              <input type="radio" name="itemCompartment" value="chilled" class="sr-only">
-              <i class="fa-solid fa-icicles text-cyan-500 text-sm mb-0.5"></i>
-              <span class="text-[11px] font-extrabold">チルド</span>
-            </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-emerald-50/50 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-700 transition flex flex-col items-center justify-center">
-              <input type="radio" name="itemCompartment" value="vegetable" class="sr-only">
-              <i class="fa-solid fa-carrot text-emerald-500 text-sm mb-0.5"></i>
-              <span class="text-[11px] font-extrabold">野菜室</span>
-            </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-purple-50/50 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 has-[:checked]:text-purple-700 transition flex flex-col items-center justify-center">
-              <input type="radio" name="itemCompartment" value="freezer" class="sr-only">
-              <i class="fa-solid fa-cube text-purple-500 text-sm mb-0.5"></i>
-              <span class="text-[11px] font-extrabold">冷凍庫</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- 品目名 -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">
-            <i class="fa-solid fa-tag text-blue-500 mr-1"></i>品目名 <span class="text-rose-500">*</span>
-          </label>
-          <input type="text" id="itemName" required placeholder="例: 卵、牛乳、鶏もも肉、豆腐" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
-        </div>
-
-        <!-- 数量と単位（スマホで押しやすい大型ステッパー付き） -->
-        <div class="space-y-1.5">
-          <label class="block text-xs font-bold text-slate-700">
-            <i class="fa-solid fa-scale-balanced text-blue-500 mr-1"></i>数量 & 単位
-          </label>
-          <div class="grid grid-cols-5 gap-2 items-center">
-            <!-- 数量ステッパー (3カラム) -->
-            <div class="col-span-3 flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-1">
-              <button type="button" id="btnModalQtyMinus" class="touch-manipulation w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
-                <i class="fa-solid fa-minus pointer-events-none"></i>
-              </button>
-              <input type="number" id="itemQuantity" step="any" min="0" value="1" required class="flex-1 text-center bg-transparent border-0 font-extrabold text-base focus:ring-0">
-              <button type="button" id="btnModalQtyPlus" class="touch-manipulation w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
-                <i class="fa-solid fa-plus pointer-events-none"></i>
-              </button>
-            </div>
-
-            <!-- 単位セレクト (2カラム) -->
-            <div class="col-span-2">
-              <select id="itemUnit" class="w-full h-12 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold">
-                <option value="個">個</option>
-                <option value="g">g</option>
-                <option value="kg">kg</option>
-                <option value="ml">ml</option>
-                <option value="L">L</option>
-                <option value="本">本</option>
-                <option value="パック">パック</option>
-                <option value="丁">丁</option>
-                <option value="袋">袋</option>
-                <option value="玉">玉</option>
-                <option value="束">束</option>
-                <option value="切れ">切れ</option>
-                <option value="缶">缶</option>
-                <option value="枚">枚</option>
-                <option value="その他">その他</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- 頻出単位クイックタップチップ -->
-          <div class="flex flex-wrap gap-1.5 pt-1">
-            <span class="text-[11px] text-slate-400 self-center mr-1">クイック:</span>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="個">個</button>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="g">g</button>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="パック">パック</button>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="本">本</button>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="袋">袋</button>
-            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="丁">丁</button>
-          </div>
-        </div>
-
-        <!-- 賞味/消費期限 -->
-        <div class="space-y-1.5">
-          <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-1">
-              <label class="block text-xs font-bold text-slate-700 mb-1">期限種別</label>
-              <select id="itemExpiryType" class="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="賞味期限">賞味期限</option>
-                <option value="消費期限">消費期限</option>
-              </select>
-            </div>
-            <div class="col-span-2">
-              <label class="block text-xs font-bold text-slate-700 mb-1">
-                期限日付 <span class="text-rose-500">*</span>
-              </label>
-              <input type="date" id="itemExpiryDate" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-          </div>
-
-          <!-- スマホ用賞味期限クイック選択ボタン -->
-          <div class="flex flex-wrap gap-1.5">
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="1">明日</button>
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="3">3日後</button>
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="5">5日後</button>
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="7">1週間後</button>
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="14">2週間後</button>
-            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="30">1ヶ月後</button>
-          </div>
-        </div>
-
-        <!-- 購入日 -->
-        <div class="space-y-1">
-          <div class="flex items-center justify-between">
-            <label class="block text-xs font-bold text-slate-700">
-              <i class="fa-regular fa-calendar-check text-blue-500 mr-1"></i>購入日
-            </label>
-            <div class="flex gap-1">
-              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="0">今日</button>
-              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-1">昨日</button>
-              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-2">おととい</button>
-            </div>
-          </div>
-          <input type="date" id="itemPurchaseDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        </div>
-
-        <!-- メモ欄 -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">
-            <i class="fa-regular fa-note-sticky text-blue-500 mr-1"></i>メモ（任意）
-          </label>
-          <input type="text" id="itemMemo" placeholder="例: 開封済み、特売品、半額" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        </div>
-
-        <!-- アクションボタン -->
-        <div class="pt-2 flex gap-2">
-          <button type="button" class="btn-close-modal touch-manipulation flex-1 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">
-            キャンセル
-          </button>
-          <button type="submit" class="touch-manipulation flex-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-extrabold shadow-md shadow-blue-500/25 active:scale-95 transition">
-            保存する
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- 2. レシート読み取りモーダル -->
-  <div id="receiptModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
-      <!-- ヘッダー -->
-      <div class="px-5 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-receipt text-base"></i>
-          <div>
-            <h3 class="font-extrabold text-sm sm:text-base">レシートAI自動スキャン</h3>
-            <p class="text-[10px] text-amber-100">食材のみを判別して自動登録</p>
-          </div>
-        </div>
-        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-xl p-1.5 active:scale-90 transition">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 pb-safe">
-        <!-- アップロード & スマホカメラ起動エリア -->
-        <div id="receiptDropZone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 rounded-2xl p-6 text-center transition">
-          <input type="file" id="receiptFileInput" accept="image/*" capture="environment" class="hidden">
-          <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-3xl mx-auto mb-3 shadow-inner">
-            <i class="fa-solid fa-camera"></i>
-          </div>
-          <p class="text-sm font-extrabold text-slate-800">レシートを撮影または選択</p>
-          <p class="text-xs text-slate-500 mt-1">日用品や雑貨をAIが自動除外します</p>
-
-          <div class="mt-4 flex flex-col sm:flex-row justify-center gap-2">
-            <button type="button" id="btnSelectFile" class="touch-manipulation w-full sm:w-auto px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-amber-500/25 active:scale-95 transition flex items-center justify-center space-x-2">
-              <i class="fa-solid fa-camera pointer-events-none"></i>
-              <span>カメラで撮影 / 画像選択</span>
-            </button>
-            <button type="button" id="btnTestReceipt" class="touch-manipulation w-full sm:w-auto px-3 py-2.5 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl text-xs font-bold transition">
-              テスト用ダミー読込
-            </button>
-          </div>
-        </div>
-
-        <!-- プレビュー & ローディング -->
-        <div id="receiptScanningView" class="hidden text-center py-8 space-y-3">
-          <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p class="text-sm font-bold text-slate-700">Gemini AIがレシートを解析中...</p>
-          <p class="text-xs text-slate-500">品目名、食材の判定、各室の分類、購入日、推定賞味期限を抽出しています</p>
-        </div>
-
-        <!-- 解析結果リスト -->
-        <div id="receiptResultView" class="hidden space-y-4">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-slate-700">検出された食材一覧</span>
-            <span id="detectedFoodCount" class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">0件</span>
-          </div>
-
-          <!-- 食材テーブル -->
-          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100" id="receiptFoodList"></div>
-
-          <!-- 除外された非食材リスト -->
-          <details class="group bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs text-slate-600">
-            <summary class="font-bold cursor-pointer list-none flex items-center justify-between text-slate-500 hover:text-slate-700">
-              <span><i class="fa-solid fa-trash-can mr-1 text-slate-400"></i> 除外された日用品・その他 (<span id="excludedItemCount">0</span>件)</span>
-              <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i>
-            </summary>
-            <ul id="excludedItemsList" class="mt-2 list-disc list-inside space-y-0.5 text-slate-500"></ul>
-          </details>
-
-          <!-- 登録ボタン -->
-          <div class="flex items-center justify-end space-x-2 pt-2">
-            <button type="button" id="btnCancelReceipt" class="touch-manipulation px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">
-              やり直す
-            </button>
-            <button type="button" id="btnAddAllDetectedItems" class="touch-manipulation px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/25 transition">
-              選択した食材を登録する
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 3. AI献立提案モーダル -->
-  <div id="mealModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
-      <!-- ヘッダー -->
-      <div class="px-5 py-3.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
-          <div>
-            <h3 class="font-extrabold text-sm sm:text-base">庫内食材フル活用！AI献立提案</h3>
-            <p class="text-[10px] text-teal-100">期限の近い食材を最優先・栄養バランス最適化</p>
-          </div>
-        </div>
-        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-xl p-1.5 active:scale-90 transition">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 pb-safe">
-        <!-- 提案トリガーパネル -->
-        <div class="bg-teal-50/70 border border-teal-200/70 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div class="text-xs text-teal-900 text-center sm:text-left">
-            <p class="font-bold">現在のストック状況から献立を考案します</p>
-            <p class="text-teal-700 text-[11px] mt-0.5">主菜・副菜・汁物を組み合わせ、食品ロスをゼロへ！</p>
-          </div>
-          <button type="button" id="btnGenerateMealPlan" class="touch-manipulation w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 flex items-center justify-center space-x-1.5 active:scale-95 transition cursor-pointer">
-            <i class="fa-solid fa-rotate-right pointer-events-none"></i>
-            <span>献立を生成する</span>
-          </button>
-        </div>
-
-        <!-- ローディング -->
-        <div id="mealLoading" class="hidden text-center py-10 space-y-3">
-          <div class="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p class="text-sm font-bold text-slate-700">AIシェフが栄養バランスと期限を計算中...</p>
-          <p class="text-xs text-slate-500">冷蔵・チルド・野菜・冷凍の各食材を美味しく組み合わせるプランを作っています</p>
-        </div>
-
-        <!-- 献立提案結果コンテナ -->
-        <div id="mealResultContainer" class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-          <div id="mealInitialNotice" class="text-center py-10 text-slate-400">
-            <i class="fa-solid fa-utensils text-4xl mb-3 text-slate-300"></i>
-            <p class="text-sm font-medium">上の「献立を生成する」ボタンを押すと、<br>AIが現在の在庫をチェックしておすすめの献立を作ります。</p>
-          </div>
-          <div id="mealContent" class="space-y-4"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 4. リアルタイム共有・同期モーダル -->
-  <div id="shareModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
-      <!-- ヘッダー -->
-      <div class="px-5 py-3.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white flex items-center justify-between shrink-0">
-        <div class="flex items-center space-x-2">
-          <i class="fa-solid fa-satellite-dish text-base"></i>
-          <div>
-            <h3 class="font-extrabold text-sm sm:text-base">リアルタイム家族共有</h3>
-            <p class="text-[10px] text-blue-200">標準HTTPS (SSE & Fetch) で安全同期</p>
-          </div>
-        </div>
-        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-xl p-1.5 active:scale-90 transition">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 pb-safe">
-        <p class="text-xs text-slate-600 leading-relaxed">
-          WebSocketや複雑なポート解放を一切使わず、GitHub Pagesやスマホ回線でも確実に同期できる標準HTTPS通信を採用しています。
-        </p>
-
-        <!-- 現在のルームID -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">現在の共有ルームID</label>
-          <div class="flex items-center space-x-2">
-            <input type="text" id="inputRoomId" readonly class="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 select-all">
-            <button type="button" id="btnCopyShareUrl" class="touch-manipulation px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer active:scale-95">
-              <i class="fa-solid fa-copy pointer-events-none"></i>
-              <span>URLコピー</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- QRコード共有 -->
-        <div class="text-center p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-          <p class="text-xs font-bold text-slate-700 mb-2">スマホのカメラで参加</p>
-          <img id="shareQrCodeImg" src="" alt="共有QRコード" class="w-32 h-32 mx-auto rounded-xl shadow-xs border border-slate-200 bg-white p-1">
-          <p class="text-[11px] text-slate-500 mt-2">家族のスマホカメラでQRを読み取ると即座に同じ冷蔵庫を共有できます</p>
-        </div>
-
-        <!-- 別のルームに参加 -->
-        <div class="pt-2 border-t border-slate-100">
-          <label class="block text-xs font-bold text-slate-700 mb-1">他のルームIDに参加する</label>
-          <div class="flex space-x-2">
-            <input type="text" id="inputJoinRoomId" placeholder="例: stockpal-xxxx" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <button type="button" id="btnJoinRoom" class="touch-manipulation px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer active:scale-95">
-              参加
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 小型カプセルトースト通知コンテナ（上部中央配置・常時最大1件のみ・画面を覆わない） -->
-  <div id="toastContainer" class="fixed top-4 inset-x-0 mx-auto max-w-xs z-50 flex flex-col items-center pointer-events-none px-4"></div>
-
+<!-- ... existing code ... -->
   <!-- ======================== アプリケーションスクリプト ======================== -->
   <script>
     const API_KEY = "";
-    const LOCAL_STORAGE_KEY = 'stockpal_items_v1';
     const pageStartTime = Date.now(); // 起動前の古いSSEメッセージを無視するための基準時刻
     
     const COMPARTMENT_META = {
-      fridge: { name: '冷蔵室', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: 'fa-snowflake', border: 'border-l-blue-500' },
-      chilled: { name: 'チルド室', color: 'bg-cyan-100 text-cyan-700 border-cyan-200', icon: 'fa-icicles', border: 'border-l-cyan-500' },
-      vegetable: { name: '野菜室', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: 'fa-carrot', border: 'border-l-emerald-500' },
-      freezer: { name: '冷凍庫', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: 'fa-cube', border: 'border-l-purple-500' }
-    };
-
-    function getRelativeDate(offsetDays) {
-      const d = new Date();
-      d.setDate(d.getDate() + offsetDays);
-      return d.toISOString().split('T')[0];
-    }
-
-    const INITIAL_ITEMS = [
-      { id: 'item-1', name: '牛乳', compartment: 'fridge', quantity: 1, unit: 'L', purchaseDate: getRelativeDate(-2), expiryDate: getRelativeDate(3), expiryType: '賞味期限', memo: '未開封', updatedAt: Date.now() },
-      { id: 'item-2', name: '卵 (10個入)', compartment: 'fridge', quantity: 8, unit: '個', purchaseDate: getRelativeDate(-4), expiryDate: getRelativeDate(6), expiryType: '賞味期限', memo: '', updatedAt: Date.now() },
-      { id: 'item-3', name: '国産 豚ロース薄切り', compartment: 'chilled', quantity: 300, unit: 'g', purchaseDate: getRelativeDate(-1), expiryDate: getRelativeDate(1), expiryType: '消費期限', memo: '今日か明日に使う', updatedAt: Date.now() },
-      { id: 'item-4', name: 'キャベツ', compartment: 'vegetable', quantity: 0.5, unit: '個', purchaseDate: getRelativeDate(-3), expiryDate: getRelativeDate(5), expiryType: '賞味期限', memo: '', updatedAt: Date.now() },
-      { id: 'item-5', name: '冷凍讃岐うどん', compartment: 'freezer', quantity: 3, unit: '玉', purchaseDate: getRelativeDate(-10), expiryDate: getRelativeDate(60), expiryType: '賞味期限', memo: 'ストック用', updatedAt: Date.now() }
-    ];
-
+<!-- ... existing code ... -->
     let items = [];
     let currentFilterCompartment = 'all';
     let searchQuery = '';
     let sortMode = 'expiry_asc';
     let currentRoomId = '';
     let sseEventSource = null;
+    let sseReconnectTimer = null;
     let clientId = 'client-' + Math.random().toString(36).substring(2, 9);
     let detectedReceiptItems = [];
 
@@ -683,25 +62,16 @@
     let syncNotificationTimer = null;
     let syncUpdateCount = 0;
 
+    function getStorageKey() {
+      return `stockpal_items_${currentRoomId || 'default'}`;
+    }
+
     function formatDate(dateStr) {
-      if (!dateStr) return '-';
-      const parts = dateStr.split('-');
-      return parts.length === 3 ? `${parts[1]}/${parts[2]}` : dateStr;
-    }
-
-    function getDaysUntilExpiry(expiryDateStr) {
-      if (!expiryDateStr) return 999;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const exp = new Date(expiryDateStr);
-      exp.setHours(0, 0, 0, 0);
-      return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-    }
-
+<!-- ... existing code ... -->
     // --- ストレージ保持 ---
     function loadSavedItems() {
       try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        const saved = localStorage.getItem(getStorageKey());
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -714,7 +84,7 @@
 
     function persistItemsLocally() {
       try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+        localStorage.setItem(getStorageKey(), JSON.stringify(items));
       } catch (e) {
         console.warn('LocalStorage save skipped:', e);
       }
@@ -749,55 +119,84 @@
       }, { passive: false });
     })();
 
+    // --- アプリ内 Pull-to-Refresh（下に引っ張って即時再同期） ---
+    (function setupPullToRefresh() {
+      let touchStartY = 0;
+      let touchDiffY = 0;
+      let isPulling = false;
+      const pullIndicator = document.getElementById('pullIndicator');
+      const pullIcon = document.getElementById('pullIcon');
+      const pullText = document.getElementById('pullText');
+      const threshold = 65;
+
+      window.addEventListener('touchstart', (e) => {
+        // 画面最上部スクロール時かつモーダルが開いていない場合のみ発火
+        const anyModalOpen = document.querySelector('#itemModal:not(.hidden), #receiptModal:not(.hidden), #mealModal:not(.hidden), #shareModal:not(.hidden)');
+        if (window.scrollY <= 2 && !anyModalOpen && e.touches.length === 1) {
+          touchStartY = e.touches[0].clientY;
+          isPulling = true;
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!isPulling) return;
+        const currentY = e.touches[0].clientY;
+        touchDiffY = currentY - touchStartY;
+
+        if (touchDiffY > 15 && window.scrollY <= 2) {
+          const move = Math.min(touchDiffY * 0.45, 70);
+          if (pullIndicator) {
+            pullIndicator.style.opacity = '1';
+            pullIndicator.style.transform = `translateY(${move}px)`;
+          }
+
+          if (touchDiffY >= threshold) {
+            if (pullIcon) pullIcon.style.transform = 'rotate(180deg)';
+            if (pullText) pullText.textContent = '離して同期';
+          } else {
+            if (pullIcon) pullIcon.style.transform = 'rotate(0deg)';
+            if (pullText) pullText.textContent = '引いて同期';
+          }
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchend', () => {
+        if (!isPulling) return;
+        isPulling = false;
+
+        if (touchDiffY >= threshold && window.scrollY <= 2) {
+          if (pullIcon) pullIcon.className = 'fa-solid fa-rotate animate-spin text-blue-500';
+          if (pullText) pullText.textContent = '同期中...';
+
+          // ルーム全体の最新ストックを即座にリクエスト
+          triggerManualSync();
+
+          setTimeout(() => {
+            if (pullIndicator) {
+              pullIndicator.style.opacity = '0';
+              pullIndicator.style.transform = 'translateY(-48px)';
+            }
+            setTimeout(() => {
+              if (pullIcon) {
+                pullIcon.className = 'fa-solid fa-arrow-down text-blue-500';
+                pullIcon.style.transform = 'rotate(0deg)';
+              }
+              if (pullText) pullText.textContent = '引いて同期';
+            }, 250);
+          }, 600);
+        } else {
+          if (pullIndicator) {
+            pullIndicator.style.opacity = '0';
+            pullIndicator.style.transform = 'translateY(-48px)';
+          }
+        }
+        touchDiffY = 0;
+      }, { passive: true });
+    })();
+
     // --- 初期化 ---
     function initApp() {
-      try {
-        initRoom();
-        items = loadSavedItems();
-        render();
-        setupEventListeners();
-        setTimeout(connectSyncEngine, 100);
-      } catch (err) {
-        console.error("Critical init error:", err);
-        items = [...INITIAL_ITEMS];
-        render();
-      }
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initApp);
-    } else {
-      initApp();
-    }
-
-    function initRoom() {
-      let roomId = '';
-      try {
-        const hash = window.location.hash || '';
-        const match = hash.match(/room=([^&]+)/);
-        if (match && match[1]) {
-          roomId = match[1].toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        }
-      } catch (e) {}
-
-      if (!roomId) {
-        roomId = 'stockpal-' + Math.random().toString(36).substring(2, 8);
-        try {
-          if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, '', `#room=${roomId}`);
-          }
-        } catch (e) {
-          try { window.location.hash = `#room=${roomId}`; } catch (err) {}
-        }
-      }
-
-      currentRoomId = roomId;
-
-      const statCode = document.getElementById('statRoomCode');
-      const inputRoom = document.getElementById('inputRoomId');
-      if (statCode) statCode.textContent = currentRoomId;
-      if (inputRoom) inputRoom.value = currentRoomId;
-
+<!-- ... existing code ... -->
       try {
         const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`;
@@ -806,16 +205,18 @@
       } catch (e) {}
     }
 
-    // --- HTTPS SSE リアルタイム同期（過去ログの通知スパム防止対策） ---
+    // --- HTTPS SSE リアルタイム同期エンジン（相互送受信の完全修復） ---
     function connectSyncEngine() {
       if (sseEventSource) {
         try { sseEventSource.close(); } catch(e){}
       }
+      clearTimeout(sseReconnectTimer);
 
       const syncIndicator = document.getElementById('syncIndicator');
       const syncStatusText = document.getElementById('syncStatusText');
-      // ?since=latest を付与して過去ログの再送を抑制
-      const topicUrl = `https://ntfy.sh/${currentRoomId}/sse?since=latest`;
+
+      // ntfy.sh の過去キャッシュ（直近1時間分）を取り込み、後から開いた端末も一発で同期
+      const topicUrl = `https://ntfy.sh/${currentRoomId}/sse?since=1h`;
 
       try {
         sseEventSource = new EventSource(topicUrl);
@@ -823,28 +224,41 @@
         sseEventSource.onopen = () => {
           if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
           if (syncStatusText) syncStatusText.textContent = '同期中';
+          // 接続時に自端末のストックを他端末へ通知し、相手の最新状態を要求
           broadcastSyncEvent({ type: 'REQ_SYNC', sender: clientId });
         };
 
         sseEventSource.onmessage = (event) => {
           try {
+            if (!event.data) return;
             const data = JSON.parse(event.data);
-            if (!data.message) return;
-            const payload = JSON.parse(data.message);
-            if (payload.sender === clientId) return;
+            
+            // ntfyのイベントが message かつ本文が存在する場合のみ処理
+            if (data.event !== 'message' || !data.message) return;
 
-            // ページ起動前に送信された過去メッセージであれば無視
-            if (payload.timestamp && payload.timestamp < pageStartTime - 2000) {
+            let payload;
+            try {
+              payload = JSON.parse(data.message);
+            } catch (err) {
               return;
             }
 
+            // 自身が送信したイベントはスキップ
+            if (payload.sender === clientId) return;
+
             handleIncomingSync(payload);
-          } catch (e) {}
+          } catch (e) {
+            console.warn('SSE message error:', e);
+          }
         };
 
         sseEventSource.onerror = () => {
           if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
-          if (syncStatusText) syncStatusText.textContent = 'スタンドアロン';
+          if (syncStatusText) syncStatusText.textContent = '再接続待機';
+          
+          try { sseEventSource.close(); } catch(e){}
+          // 5秒後に自動再接続
+          sseReconnectTimer = setTimeout(connectSyncEngine, 5000);
         };
       } catch (err) {
         if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
@@ -852,17 +266,33 @@
       }
     }
 
+    // イベントのブロードキャスト（ntfy.shの仕様に合わせてプレーンテキストで確実に送信）
     async function broadcastSyncEvent(action) {
       action.sender = clientId;
       action.timestamp = Date.now();
 
       try {
+        // ntfy.sh/<topic> にPOSTボディを生文字列として渡すことで data.message にそのまま格納される
         await fetch(`https://ntfy.sh/${currentRoomId}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(action)
         });
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Sync broadcast failed:', e);
+      }
+    }
+
+    // 最新の全ストック一覧を同室のメンバーへ確実にブロードキャスト
+    function broadcastFullState() {
+      broadcastSyncEvent({
+        type: 'STATE_SNAPSHOT',
+        items: items
+      });
+    }
+
+    function triggerManualSync() {
+      broadcastSyncEvent({ type: 'REQ_SYNC' });
+      showToast('ストック同期を確認中...', 'info');
     }
 
     function queueSyncToast(label) {
@@ -872,7 +302,7 @@
         if (syncUpdateCount === 1) {
           showToast(label, 'info');
         } else if (syncUpdateCount > 1) {
-          showToast(`${syncUpdateCount}件のストックが同期されました`, 'info');
+          showToast(`${syncUpdateCount}件の変更を同期しました`, 'info');
         }
         syncUpdateCount = 0;
       }, 500);
@@ -881,15 +311,23 @@
     function handleIncomingSync(payload) {
       switch (payload.type) {
         case 'REQ_SYNC':
-          broadcastSyncEvent({ type: 'RES_SYNC', items: items });
+          // 参加してきた家族へ現在の最新リストを返送
+          if (items && items.length > 0) {
+            broadcastFullState();
+          }
           break;
+
+        case 'STATE_SNAPSHOT':
         case 'RES_SYNC':
-          if (Array.isArray(payload.items) && payload.items.length > 0) {
+          if (Array.isArray(payload.items)) {
+            // 受信した最新ストックリストで同期・反映
             items = payload.items;
             persistItemsLocally();
             render();
+            queueSyncToast('最新ストックを受信しました');
           }
           break;
+
         case 'ITEM_ADDED':
           if (!items.some(i => i.id === payload.item.id)) {
             items.unshift(payload.item);
@@ -898,6 +336,7 @@
             queueSyncToast(`追加: ${payload.item.name}`);
           }
           break;
+
         case 'ITEM_UPDATED':
           const idx = items.findIndex(i => i.id === payload.item.id);
           if (idx !== -1) {
@@ -907,12 +346,14 @@
             queueSyncToast(`更新: ${payload.item.name}`);
           }
           break;
+
         case 'ITEM_DELETED':
           items = items.filter(i => i.id !== payload.id);
           persistItemsLocally();
           render();
           queueSyncToast('食材を使い切りました');
           break;
+
         case 'BATCH_ADDED':
           if (Array.isArray(payload.newItems)) {
             items = [...payload.newItems, ...items];
@@ -925,90 +366,7 @@
     }
 
     // --- モーダル制御 ---
-    function closeAllModals() {
-      document.querySelectorAll('#itemModal, #receiptModal, #mealModal, #shareModal').forEach(m => {
-        m.classList.add('hidden');
-        m.classList.remove('flex');
-      });
-    }
-
-    function openItemModal(itemId = null) {
-      const modal = document.getElementById('itemModal');
-      const form = document.getElementById('itemForm');
-      if (!modal || !form) return;
-      form.reset();
-
-      const titleEl = document.getElementById('itemModalTitle');
-      const idInput = document.getElementById('itemId');
-
-      if (itemId) {
-        const item = items.find(i => i.id === itemId);
-        if (!item) return;
-
-        if (titleEl) titleEl.textContent = 'ストックを編集';
-        if (idInput) idInput.value = item.id;
-
-        const radio = form.querySelector(`input[name="itemCompartment"][value="${item.compartment}"]`);
-        if (radio) radio.checked = true;
-
-        document.getElementById('itemName').value = item.name || '';
-        document.getElementById('itemQuantity').value = item.quantity ?? 1;
-        document.getElementById('itemUnit').value = item.unit || '個';
-        document.getElementById('itemExpiryType').value = item.expiryType || '賞味期限';
-        document.getElementById('itemExpiryDate').value = item.expiryDate || '';
-        document.getElementById('itemPurchaseDate').value = item.purchaseDate || getRelativeDate(0);
-        document.getElementById('itemMemo').value = item.memo || '';
-      } else {
-        if (titleEl) titleEl.textContent = 'ストックを追加';
-        if (idInput) idInput.value = '';
-
-        const defaultRadio = form.querySelector('input[name="itemCompartment"][value="fridge"]');
-        if (defaultRadio) defaultRadio.checked = true;
-
-        document.getElementById('itemName').value = '';
-        document.getElementById('itemQuantity').value = '1';
-        document.getElementById('itemUnit').value = '個';
-        document.getElementById('itemExpiryType').value = '賞味期限';
-        document.getElementById('itemExpiryDate').value = getRelativeDate(3);
-        document.getElementById('itemPurchaseDate').value = getRelativeDate(0);
-        document.getElementById('itemMemo').value = '';
-      }
-
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-
-      // iPhoneでキーボード立ち上がり時でも「保管場所」が見切れないようスクロール位置を最上部に固定
-      form.scrollTop = 0;
-      modal.scrollTop = 0;
-      setTimeout(() => {
-        form.scrollTop = 0;
-        modal.scrollTop = 0;
-      }, 50);
-    }
-
-    function saveItemFromForm() {
-      const idInput = document.getElementById('itemId');
-      const editId = idInput ? idInput.value.trim() : '';
-
-      const form = document.getElementById('itemForm');
-      const compartment = form.querySelector('input[name="itemCompartment"]:checked')?.value || 'fridge';
-      const name = document.getElementById('itemName').value.trim();
-      const quantity = parseFloat(document.getElementById('itemQuantity').value) || 1;
-      const unit = document.getElementById('itemUnit').value;
-      const expiryType = document.getElementById('itemExpiryType').value;
-      const expiryDate = document.getElementById('itemExpiryDate').value;
-      const purchaseDate = document.getElementById('itemPurchaseDate').value || getRelativeDate(0);
-      const memo = document.getElementById('itemMemo').value.trim();
-
-      if (!name) {
-        showToast('品目名を入力してください', 'error');
-        return;
-      }
-      if (!expiryDate) {
-        showToast('期限日を入力してください', 'error');
-        return;
-      }
-
+<!-- ... existing code ... -->
       if (editId) {
         const idx = items.findIndex(i => i.id === editId);
         if (idx !== -1) {
@@ -1026,7 +384,7 @@
           };
           items[idx] = updated;
           persistItemsLocally();
-          broadcastSyncEvent({ type: 'ITEM_UPDATED', item: updated });
+          broadcastFullState();
           showToast(`「${name}」を更新しました`, 'success');
         }
       } else {
@@ -1044,7 +402,7 @@
         };
         items.unshift(newItem);
         persistItemsLocally();
-        broadcastSyncEvent({ type: 'ITEM_ADDED', item: newItem });
+        broadcastFullState();
         showToast(`「${name}」を追加しました`, 'success');
       }
 
@@ -1063,7 +421,7 @@
 
       persistItemsLocally();
       render();
-      broadcastSyncEvent({ type: 'ITEM_UPDATED', item });
+      broadcastFullState();
     }
     window.changeQuantity = changeQuantity;
 
@@ -1079,446 +437,24 @@
       items = items.filter(i => i.id !== itemId);
       persistItemsLocally();
       render();
-      broadcastSyncEvent({ type: 'ITEM_DELETED', id: itemId });
+      broadcastFullState();
       showToast(`「${name}」を使い切りました！`, 'success');
     }
     window.consumeItem = consumeItem;
 
     function navigateHome() {
+<!-- ... existing code ... -->
+      items = [...newItemsToAdd, ...items];
+      persistItemsLocally();
+      broadcastFullState();
+
       closeAllModals();
-
-      currentFilterCompartment = 'all';
-      document.querySelectorAll('.compartment-tab').forEach(b => {
-        if (b.dataset.compartment === 'all') {
-          b.classList.add('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-          b.classList.remove('text-slate-600', 'hover:bg-slate-100');
-        } else {
-          b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-          b.classList.add('text-slate-600', 'hover:bg-slate-100');
-        }
-      });
-
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput) {
-        searchInput.value = '';
-        searchQuery = '';
-      }
-
       render();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showToast(`${newItemsToAdd.length}件の食材を登録しました！`, 'success');
     }
 
-    function resetReceiptModal() {
-      const dropZone = document.getElementById('receiptDropZone');
-      const scanningView = document.getElementById('receiptScanningView');
-      const resultView = document.getElementById('receiptResultView');
-      const fileInput = document.getElementById('receiptFileInput');
-
-      if (dropZone) dropZone.classList.remove('hidden');
-      if (scanningView) scanningView.classList.add('hidden');
-      if (resultView) resultView.classList.add('hidden');
-      if (fileInput) fileInput.value = '';
-
-      detectedReceiptItems = [];
-    }
-
-    async function handleReceiptFile(file) {
-      if (!file) return;
-
-      const dropZone = document.getElementById('receiptDropZone');
-      const scanningView = document.getElementById('receiptScanningView');
-      if (dropZone) dropZone.classList.add('hidden');
-      if (scanningView) scanningView.classList.remove('hidden');
-
-      try {
-        const base64Data = await fileToBase64(file);
-        await analyzeReceiptWithGemini(base64Data, file.type || 'image/jpeg');
-      } catch (err) {
-        console.warn('API処理の代替としてシミュレーションを実行します:', err);
-        simulateReceiptScanning();
-      }
-    }
-
-    // --- 描画処理 ---
-    function render() {
-      updateCountsAndStats();
-
-      const grid = document.getElementById('stockGrid');
-      const empty = document.getElementById('emptyState');
-      if (!grid) return;
-
-      grid.innerHTML = '';
-
-      let filtered = items.filter(item => {
-        const matchesComp = (currentFilterCompartment === 'all') || (item.compartment === currentFilterCompartment);
-        const matchesQuery = !searchQuery || item.name.toLowerCase().includes(searchQuery) || (item.memo && item.memo.toLowerCase().includes(searchQuery));
-        return matchesComp && matchesQuery;
-      });
-
-      filtered.sort((a, b) => {
-        if (sortMode === 'expiry_asc') return (a.expiryDate || '9999') > (b.expiryDate || '9999') ? 1 : -1;
-        if (sortMode === 'expiry_desc') return (a.expiryDate || '0000') < (b.expiryDate || '0000') ? 1 : -1;
-        if (sortMode === 'purchase_desc') return (a.purchaseDate || '0000') < (b.purchaseDate || '0000') ? 1 : -1;
-        if (sortMode === 'purchase_asc') return (a.purchaseDate || '9999') > (b.purchaseDate || '9999') ? 1 : -1;
-        if (sortMode === 'name_asc') return a.name.localeCompare(b.name, 'ja');
-        return 0;
-      });
-
-      if (filtered.length === 0) {
-        if (empty) empty.classList.remove('hidden');
-      } else {
-        if (empty) empty.classList.add('hidden');
-      }
-
-      filtered.forEach(item => {
-        const card = createItemCard(item);
-        grid.appendChild(card);
-      });
-    }
-
-    function updateCountsAndStats() {
-      const counts = { all: items.length, fridge: 0, chilled: 0, vegetable: 0, freezer: 0 };
-      let expiringSoon = 0;
-      let expired = 0;
-
-      items.forEach(item => {
-        if (counts[item.compartment] !== undefined) counts[item.compartment]++;
-        const days = getDaysUntilExpiry(item.expiryDate);
-        if (days < 0) expired++;
-        else if (days <= 3) expiringSoon++;
-      });
-
-      const setTxt = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val;
-      };
-
-      setTxt('count-all', counts.all);
-      setTxt('count-fridge', counts.fridge);
-      setTxt('count-chilled', counts.chilled);
-      setTxt('count-vegetable', counts.vegetable);
-      setTxt('count-freezer', counts.freezer);
-
-      setTxt('statTotalItems', items.length);
-      setTxt('statExpiringSoon', expiringSoon);
-      setTxt('statExpired', expired);
-    }
-
-    function createItemCard(item) {
-      const days = getDaysUntilExpiry(item.expiryDate);
-      const comp = COMPARTMENT_META[item.compartment] || COMPARTMENT_META.fridge;
-
-      let statusBadge = '';
-      let borderAlertClass = comp.border;
-
-      if (days < 0) {
-        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-700 border border-rose-200 badge-pulse"><i class="fa-solid fa-triangle-exclamation mr-1"></i>期限切 (${Math.abs(days)}日前)</span>`;
-        borderAlertClass = 'border-l-rose-500';
-      } else if (days === 0) {
-        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 badge-pulse"><i class="fa-solid fa-clock mr-1"></i>今日まで！</span>`;
-        borderAlertClass = 'border-l-amber-500';
-      } else if (days <= 3) {
-        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">あと ${days}日</span>`;
-        borderAlertClass = 'border-l-amber-400';
-      } else {
-        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">あと ${days}日</span>`;
-      }
-
-      const card = document.createElement('div');
-      card.className = `bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs hover:shadow-md transition border-l-4 ${borderAlertClass} flex flex-col justify-between`;
-
-      card.innerHTML = `
-        <div>
-          <div class="flex items-start justify-between gap-1 mb-2">
-            <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${comp.color}">
-              <i class="fa-solid ${comp.icon} text-[10px]"></i>
-              <span>${comp.name}</span>
-            </span>
-            ${statusBadge}
-          </div>
-
-          <div class="flex items-baseline justify-between mb-2">
-            <h4 class="font-extrabold text-base text-slate-800 leading-snug break-words">${escapeHtml(item.name)}</h4>
-            <div class="text-right pl-2 whitespace-nowrap">
-              <span class="text-xl font-black text-slate-900">${item.quantity}</span>
-              <span class="text-xs font-bold text-slate-500 ml-0.5">${escapeHtml(item.unit || '個')}</span>
-            </div>
-          </div>
-
-          <div class="text-[11px] text-slate-500 space-y-1 mb-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            <div class="flex justify-between">
-              <span><i class="fa-regular fa-calendar text-slate-400 mr-1"></i>購入日:</span>
-              <span class="font-semibold text-slate-700">${item.purchaseDate || '-'}</span>
-            </div>
-            <div class="flex justify-between">
-              <span><i class="fa-regular fa-calendar-xmark text-slate-400 mr-1"></i>${item.expiryType || '賞味期限'}:</span>
-              <span class="font-bold text-slate-800">${item.expiryDate || '-'}</span>
-            </div>
-            ${item.memo ? `<div class="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/60 truncate"><i class="fa-regular fa-note-sticky mr-1"></i>${escapeHtml(item.memo)}</div>` : ''}
-          </div>
-        </div>
-
-        <!-- 操作ボタン群（増減・編集・使い切り：連打ズーム抑止クラス付き） -->
-        <div class="flex items-center justify-between pt-2 border-t border-slate-100 gap-1">
-          <div class="flex items-center space-x-1.5">
-            <button type="button" onclick="changeQuantity('${item.id}', -1)" title="1つ減らす" class="touch-manipulation w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
-              <i class="fa-solid fa-minus pointer-events-none"></i>
-            </button>
-            <button type="button" onclick="changeQuantity('${item.id}', 1)" title="1つ増やす" class="touch-manipulation w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
-              <i class="fa-solid fa-plus pointer-events-none"></i>
-            </button>
-          </div>
-
-          <div class="flex items-center space-x-1">
-            <button type="button" onclick="editItem('${item.id}')" title="編集" class="touch-manipulation px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition cursor-pointer">
-              <i class="fa-solid fa-pen-to-square mr-1 pointer-events-none"></i>編集
-            </button>
-            <button type="button" onclick="consumeItem('${item.id}')" title="使い切った（削除）" class="touch-manipulation px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200 transition cursor-pointer">
-              <i class="fa-solid fa-check mr-1 pointer-events-none"></i>使い切った
-            </button>
-          </div>
-        </div>
-      `;
-
-      return card;
-    }
-
-    // --- イベントリスナーの一元管理 ---
-    function setupEventListeners() {
-      // 1. 各室タブ
-      document.querySelectorAll('.compartment-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.compartment-tab').forEach(b => {
-            b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-            b.classList.add('text-slate-600', 'hover:bg-slate-100');
-          });
-          btn.classList.add('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
-          btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
-
-          currentFilterCompartment = btn.dataset.compartment;
-          render();
-        });
-      });
-
-      // 2. モバイル下部固定ナビゲーションバー
-      const btnNavHome = document.getElementById('btnNavHome');
-      if (btnNavHome) btnNavHome.addEventListener('click', navigateHome);
-
-      const btnNavAdd = document.getElementById('btnNavAdd');
-      if (btnNavAdd) btnNavAdd.addEventListener('click', () => openItemModal());
-
-      const btnNavReceipt = document.getElementById('btnNavReceipt');
-      if (btnNavReceipt) {
-        btnNavReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      const btnNavMeal = document.getElementById('btnNavMeal');
-      if (btnNavMeal) {
-        btnNavMeal.addEventListener('click', () => {
-          const m = document.getElementById('mealModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      const btnNavShare = document.getElementById('btnNavShare');
-      if (btnNavShare) {
-        btnNavShare.addEventListener('click', () => {
-          const m = document.getElementById('shareModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      // 3. デスクトップ＆汎用追加ボタン
-      const btnOpenAdd = document.getElementById('btnOpenAddModal');
-      if (btnOpenAdd) btnOpenAdd.addEventListener('click', () => openItemModal());
-
-      const btnEmptyAdd = document.getElementById('btnEmptyAdd');
-      if (btnEmptyAdd) btnEmptyAdd.addEventListener('click', () => openItemModal());
-
-      // 4. レシートモーダルを開くボタン
-      const btnOpenReceipt = document.getElementById('btnOpenReceiptModal');
-      if (btnOpenReceipt) {
-        btnOpenReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      const btnEmptyReceipt = document.getElementById('btnEmptyReceipt');
-      if (btnEmptyReceipt) {
-        btnEmptyReceipt.addEventListener('click', () => {
-          resetReceiptModal();
-          const m = document.getElementById('receiptModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      // 5. モーダル内数量ステッパー (+/-)
-      const modalQtyInput = document.getElementById('itemQuantity');
-      const btnModalQtyMinus = document.getElementById('btnModalQtyMinus');
-      const btnModalQtyPlus = document.getElementById('btnModalQtyPlus');
-      if (btnModalQtyMinus && modalQtyInput) {
-        btnModalQtyMinus.addEventListener('click', () => {
-          const val = Math.max(0, (parseFloat(modalQtyInput.value) || 1) - 1);
-          modalQtyInput.value = val;
-        });
-      }
-      if (btnModalQtyPlus && modalQtyInput) {
-        btnModalQtyPlus.addEventListener('click', () => {
-          const val = (parseFloat(modalQtyInput.value) || 0) + 1;
-          modalQtyInput.value = val;
-        });
-      }
-
-      // 6. 単位クイックチップ
-      document.querySelectorAll('.unit-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const unitSelect = document.getElementById('itemUnit');
-          if (unitSelect) unitSelect.value = btn.dataset.unit;
-        });
-      });
-
-      // 7. 賞味期限クイック選択チップ
-      document.querySelectorAll('.expiry-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const offset = parseInt(btn.dataset.offset, 10);
-          const expInput = document.getElementById('itemExpiryDate');
-          if (expInput) expInput.value = getRelativeDate(offset);
-        });
-      });
-
-      // 8. 購入日クイック選択チップ
-      document.querySelectorAll('.purchase-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const offset = parseInt(btn.dataset.offset, 10);
-          const purInput = document.getElementById('itemPurchaseDate');
-          if (purInput) purInput.value = getRelativeDate(offset);
-        });
-      });
-
-      // 9. 検索・ソート
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-          searchQuery = e.target.value.trim().toLowerCase();
-          render();
-        });
-      }
-
-      const sortSelect = document.getElementById('sortSelect');
-      if (sortSelect) {
-        sortSelect.addEventListener('change', (e) => {
-          sortMode = e.target.value;
-          render();
-        });
-      }
-
-      // 10. モーダル閉じるボタン
-      document.querySelectorAll('.btn-close-modal').forEach(btn => {
-        btn.addEventListener('click', closeAllModals);
-      });
-
-      // 11. アイテム保存フォーム
-      const itemForm = document.getElementById('itemForm');
-      if (itemForm) {
-        itemForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          saveItemFromForm();
-        });
-
-        // iPhoneキーボード出現時に外枠スクロールが発生しないようガード
-        itemForm.querySelectorAll('input, select').forEach(input => {
-          input.addEventListener('focus', () => {
-            const modal = document.getElementById('itemModal');
-            if (modal) modal.scrollTop = 0;
-          });
-        });
-      }
-
-      // 12. レシート撮影・ファイル選択
-      const btnSelect = document.getElementById('btnSelectFile');
-      const fileInput = document.getElementById('receiptFileInput');
-      if (btnSelect && fileInput) {
-        btnSelect.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (file) handleReceiptFile(file);
-        });
-      }
-
-      const btnTestReceipt = document.getElementById('btnTestReceipt');
-      if (btnTestReceipt) {
-        btnTestReceipt.addEventListener('click', simulateReceiptScanning);
-      }
-
-      const btnCancelReceipt = document.getElementById('btnCancelReceipt');
-      if (btnCancelReceipt) {
-        btnCancelReceipt.addEventListener('click', resetReceiptModal);
-      }
-
-      const btnAddDetected = document.getElementById('btnAddAllDetectedItems');
-      if (btnAddDetected) {
-        btnAddDetected.addEventListener('click', commitDetectedReceiptItems);
-      }
-
-      // 13. 献立モーダル関連
-      const btnOpenMeal = document.getElementById('btnOpenMealModal');
-      if (btnOpenMeal) {
-        btnOpenMeal.addEventListener('click', () => {
-          const m = document.getElementById('mealModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      const btnGenMeal = document.getElementById('btnGenerateMealPlan');
-      if (btnGenMeal) {
-        btnGenMeal.addEventListener('click', generateMealPlanWithGemini);
-      }
-
-      // 14. 共有関連
-      const btnShare = document.getElementById('btnShareModal');
-      if (btnShare) {
-        btnShare.addEventListener('click', () => {
-          const m = document.getElementById('shareModal');
-          if (m) {
-            m.classList.remove('hidden');
-            m.classList.add('flex');
-          }
-        });
-      }
-
-      const btnCopy = document.getElementById('btnCopyShareUrl');
-      if (btnCopy) {
-        btnCopy.addEventListener('click', () => {
-          const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
-          copyToClipboard(shareUrl);
-          showToast('共有リンクをコピーしました', 'success');
-        });
-      }
-
+    // --- AI献立提案 (Gemini 3 Flash API) ---
+<!-- ... existing code ... -->
       const btnJoin = document.getElementById('btnJoinRoom');
       if (btnJoin) {
         btnJoin.addEventListener('click', () => {
@@ -1529,384 +465,15 @@
           }
         });
       }
+
+      // ハッシュ切り替え時の自動再接続
+      window.addEventListener('hashchange', () => {
+        initRoom();
+        items = loadSavedItems();
+        render();
+        connectSyncEngine();
+      });
     }
 
     // --- レシート画像変換 & Gemini解析 ---
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function analyzeReceiptWithGemini(base64Data, mimeType) {
-      const today = new Date().toISOString().split('T')[0];
-      const systemPrompt = `
-あなたは日本のスーパーや食品店のレシートを正確に判別するAIです。
-画像から【食材】と【それ以外（日用品・雑貨・レジ袋など）】を判別し、食材のみをJSONフォーマットで返してください。
-
-形式:
-{
-  "items": [
-    {
-      "name": "食材名",
-      "compartment": "fridge" または "chilled" または "vegetable" または "freezer",
-      "quantity": 1,
-      "unit": "個" または "g" または "本" または "パック" または "丁",
-      "purchaseDate": "${today}",
-      "expiryDays": 7,
-      "expiryType": "賞味期限" または "消費期限"
-    }
-  ],
-  "excludedItems": ["サランラップ", "レジ袋"]
-}
-`;
-
-      const payload = {
-        contents: [{
-          role: "user",
-          parts: [
-            { text: "レシートから食材を抽出し、非食材を除外してJSONで出力してください。" },
-            { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } }
-          ]
-        }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: { responseMimeType: "application/json" }
-      };
-
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error('API failed');
-      const resData = await response.json();
-      const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-      const parsed = JSON.parse(rawText);
-      displayReceiptResult(parsed);
-    }
-
-    function simulateReceiptScanning() {
-      const dropZone = document.getElementById('receiptDropZone');
-      const scanningView = document.getElementById('receiptScanningView');
-      if (dropZone) dropZone.classList.add('hidden');
-      if (scanningView) scanningView.classList.remove('hidden');
-
-      setTimeout(() => {
-        const dummyResult = {
-          items: [
-            { name: "たまご 10個入", compartment: "fridge", quantity: 1, unit: "パック", purchaseDate: getRelativeDate(0), expiryDays: 14, expiryType: "賞味期限" },
-            { name: "若鶏モモ肉", compartment: "chilled", quantity: 450, unit: "g", purchaseDate: getRelativeDate(0), expiryDays: 2, expiryType: "消費期限" },
-            { name: "きゅうり", compartment: "vegetable", quantity: 3, unit: "本", purchaseDate: getRelativeDate(0), expiryDays: 5, expiryType: "賞味期限" },
-            { name: "木綿豆腐", compartment: "chilled", quantity: 1, unit: "丁", purchaseDate: getRelativeDate(0), expiryDays: 4, expiryType: "消費期限" },
-            { name: "冷凍ギョーザ", compartment: "freezer", quantity: 1, unit: "パック", purchaseDate: getRelativeDate(0), expiryDays: 90, expiryType: "賞味期限" }
-          ],
-          excludedItems: ["サランラップ 22cm", "花王 食器用洗剤", "レジ袋 Mサイズ"]
-        };
-        displayReceiptResult(dummyResult);
-      }, 1000);
-    }
-
-    function displayReceiptResult(data) {
-      document.getElementById('receiptScanningView').classList.add('hidden');
-      document.getElementById('receiptResultView').classList.remove('hidden');
-
-      const foodList = document.getElementById('receiptFoodList');
-      const excludedList = document.getElementById('excludedItemsList');
-      foodList.innerHTML = '';
-      excludedList.innerHTML = '';
-
-      const detected = Array.isArray(data.items) ? data.items : [];
-      const excluded = Array.isArray(data.excludedItems) ? data.excludedItems : [];
-
-      detectedReceiptItems = detected.map((it, idx) => {
-        const baseDate = new Date(it.purchaseDate || getRelativeDate(0));
-        baseDate.setDate(baseDate.getDate() + (it.expiryDays || 5));
-        const expDateStr = baseDate.toISOString().split('T')[0];
-
-        return {
-          id: 'receipt-' + Date.now() + '-' + idx,
-          name: it.name,
-          compartment: it.compartment || 'fridge',
-          quantity: it.quantity || 1,
-          unit: it.unit || '個',
-          purchaseDate: it.purchaseDate || getRelativeDate(0),
-          expiryDate: expDateStr,
-          expiryType: it.expiryType || '賞味期限',
-          memo: 'レシート読取',
-          selected: true
-        };
-      });
-
-      document.getElementById('detectedFoodCount').textContent = `${detectedReceiptItems.length}件`;
-      document.getElementById('excludedItemCount').textContent = excluded.length;
-
-      detectedReceiptItems.forEach((item, index) => {
-        const row = document.createElement('div');
-        row.className = 'p-3 flex items-center justify-between gap-2 hover:bg-slate-50 transition';
-        row.innerHTML = `
-          <div class="flex items-center space-x-3">
-            <input type="checkbox" checked id="chk-item-${index}" class="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
-            <div>
-              <p class="text-xs font-bold text-slate-800">${escapeHtml(item.name)}</p>
-              <div class="flex items-center space-x-2 text-[10px] text-slate-500 mt-0.5">
-                <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold">${COMPARTMENT_META[item.compartment]?.name || '冷蔵室'}</span>
-                <span>${item.quantity} ${item.unit}</span>
-                <span>期限: ${formatDate(item.expiryDate)}</span>
-              </div>
-            </div>
-          </div>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">食材認定</span>
-        `;
-
-        row.querySelector(`#chk-item-${index}`).addEventListener('change', (e) => {
-          detectedReceiptItems[index].selected = e.target.checked;
-        });
-
-        foodList.appendChild(row);
-      });
-
-      if (excluded.length === 0) {
-        excludedList.innerHTML = '<li class="text-slate-400">除外された日用品はありませんでした。</li>';
-      } else {
-        excluded.forEach(name => {
-          const li = document.createElement('li');
-          li.textContent = name;
-          excludedList.appendChild(li);
-        });
-      }
-    }
-
-    function commitDetectedReceiptItems() {
-      const selected = detectedReceiptItems.filter(i => i.selected);
-      if (selected.length === 0) {
-        showToast('登録する食材が選択されていません', 'info');
-        return;
-      }
-
-      const newItemsToAdd = selected.map(s => ({
-        id: 'item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-        name: s.name,
-        compartment: s.compartment,
-        quantity: s.quantity,
-        unit: s.unit,
-        purchaseDate: s.purchaseDate,
-        expiryDate: s.expiryDate,
-        expiryType: s.expiryType,
-        memo: s.memo,
-        updatedAt: Date.now()
-      }));
-
-      items = [...newItemsToAdd, ...items];
-      persistItemsLocally();
-      broadcastSyncEvent({ type: 'BATCH_ADDED', newItems: newItemsToAdd });
-
-      closeAllModals();
-      render();
-      showToast(`${newItemsToAdd.length}件の食材を登録しました！`, 'success');
-    }
-
-    // --- AI献立提案 (Gemini 3 Flash API) ---
-    async function generateMealPlanWithGemini() {
-      if (items.length === 0) {
-        showToast('冷蔵庫に食材がありません。先に食材を追加してください。', 'info');
-        return;
-      }
-
-      const initialNotice = document.getElementById('mealInitialNotice');
-      if (initialNotice) initialNotice.remove();
-
-      document.getElementById('mealLoading').classList.remove('hidden');
-      document.getElementById('mealContent').innerHTML = '';
-
-      const stockSummary = items.map(i => {
-        const days = getDaysUntilExpiry(i.expiryDate);
-        return `- ${i.name} (場所:${COMPARTMENT_META[i.compartment]?.name}, 数量:${i.quantity}${i.unit}, 期限まで:${days}日, 種別:${i.expiryType})`;
-      }).join('\n');
-
-      const systemPrompt = `
-プロの管理栄養士として、ユーザーの冷蔵庫ストック情報から「期限が近い食材の消費」と「栄養バランス」を両立した献立を提案してください。
-必ず以下のJSONスキーマで返してください:
-{
-  "menuTitle": "献立タイトル",
-  "nutritionHighlight": "栄養のポイント（2〜3行）",
-  "dishes": [
-    {
-      "name": "料理名",
-      "type": "主菜" または "副菜" または "汁物",
-      "usedIngredients": ["食材1", "食材2"],
-      "cookingTime": "所要時間",
-      "recipeSteps": ["手順1", "手順2"]
-    }
-  ],
-  "consumedStockItems": ["消費できる食材名1", "消費できる食材名2"]
-}
-`;
-
-      const userPrompt = `現在のストック一覧:\n${stockSummary}\n今夜のおすすめ献立を提案してください。`;
-
-      try {
-        const payload = {
-          contents: [{ parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { responseMimeType: "application/json" }
-        };
-
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) throw new Error('API Request error');
-        const resData = await response.json();
-        const plan = JSON.parse(resData.candidates[0].content.parts[0].text);
-        renderMealPlan(plan);
-      } catch (err) {
-        console.warn('Gemini API call fallback:', err);
-        renderFallbackMealPlan();
-      } finally {
-        document.getElementById('mealLoading').classList.add('hidden');
-      }
-    }
-
-    function renderMealPlan(plan) {
-      const container = document.getElementById('mealContent');
-      container.innerHTML = `
-        <div class="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl p-4">
-          <div class="flex items-center space-x-2 text-teal-800 font-extrabold text-base mb-1">
-            <i class="fa-solid fa-utensils"></i>
-            <span>${escapeHtml(plan.menuTitle)}</span>
-          </div>
-          <p class="text-xs text-teal-700 leading-relaxed">${escapeHtml(plan.nutritionHighlight)}</p>
-          <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
-            <span class="text-[10px] font-bold text-slate-500">消費できる食材:</span>
-            ${(plan.consumedStockItems || []).map(ing => `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-teal-800 border border-teal-200 shadow-2xs">${escapeHtml(ing)}</span>`).join('')}
-          </div>
-        </div>
-
-        <div class="space-y-3 pt-1">
-          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">構成メニュー & レシピ</h4>
-          ${plan.dishes.map(dish => `
-            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
-              <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center space-x-2">
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${dish.type === '主菜' ? 'bg-orange-100 text-orange-700' : dish.type === '副菜' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(dish.type)}</span>
-                  <span class="font-bold text-sm text-slate-800">${escapeHtml(dish.name)}</span>
-                </div>
-                <span class="text-xs text-slate-400 font-medium"><i class="fa-regular fa-clock mr-1"></i>${escapeHtml(dish.cookingTime || '10分')}</span>
-              </div>
-              <p class="text-[11px] text-slate-500 mb-2">
-                <strong>使用食材:</strong> ${dish.usedIngredients.map(u => escapeHtml(u)).join(', ')}
-              </p>
-              <div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-600 space-y-1">
-                ${dish.recipeSteps.map((step, idx) => `
-                  <div class="flex items-start space-x-2">
-                    <span class="font-bold text-slate-400 text-[10px]">${idx + 1}.</span>
-                    <span class="text-[11px]">${escapeHtml(step)}</span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-
-    function renderFallbackMealPlan() {
-      const fallback = {
-        menuTitle: "冷蔵・チルド食材をスピード使い切り！野菜たっぷりバランス定食",
-        nutritionHighlight: "チルド室のタンパク質と野菜室の食物繊維・ビタミンを組み合わせ、賞味期限の近い食材を一気に美味しく消費します。",
-        consumedStockItems: ["豚肉", "キャベツ", "卵", "豆腐"],
-        dishes: [
-          {
-            name: "豚肉とキャベツのスタミナ味噌炒め",
-            type: "主菜",
-            cookingTime: "12分",
-            usedIngredients: ["豚肉", "キャベツ"],
-            recipeSteps: [
-              "キャベツをざく切りにし、豚肉は一口大に切る。",
-              "フライパンに油を熱し、豚肉を炒めて色が変わったらキャベツを加える。",
-              "味噌、みりん、醤油各小さじ2を絡めて強火でさっと炒め合わせる。"
-            ]
-          },
-          {
-            name: "ふわふわ卵と豆腐のかき玉スープ",
-            type: "汁物",
-            cookingTime: "8分",
-            usedIngredients: ["卵", "豆腐"],
-            recipeSteps: [
-              "小鍋に水300mlと和風だし、醤油を煮立て、さいの目切りにした豆腐を入れる。",
-              "水溶き片栗粉で軽くとろみをつけ、溶き卵を回し入れて火を止める。"
-            ]
-          }
-        ]
-      };
-      renderMealPlan(fallback);
-    }
-
-    // --- 汎用ユーティリティ ---
-    function copyToClipboard(text) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-      } else {
-        fallbackCopy(text);
-      }
-    }
-
-    function fallbackCopy(text) {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(textArea);
-    }
-
-    // 小型カプセルトースト（画面を覆わず常時最大1件のみ上部表示）
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
-      if (!container) return;
-
-      // 画面を埋め尽くさないよう既存の通知を即時クリア
-      container.innerHTML = '';
-
-      const toast = document.createElement('div');
-
-      let icon = 'fa-circle-info text-blue-500';
-      let border = 'border-blue-200';
-      if (type === 'success') { icon = 'fa-circle-check text-emerald-500'; border = 'border-emerald-200'; }
-      if (type === 'error') { icon = 'fa-circle-exclamation text-rose-500'; border = 'border-rose-200'; }
-
-      toast.className = `glass-effect border ${border} px-3.5 py-1.5 rounded-full shadow-md flex items-center space-x-2 text-[11px] font-bold text-slate-800 pointer-events-auto transition-all duration-200 animate-in fade-in slide-in-from-top-2`;
-      toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="truncate max-w-[200px]">${escapeHtml(message)}</span>`;
-
-      container.appendChild(toast);
-      setTimeout(() => {
-        toast.classList.add('opacity-0', '-translate-y-2');
-        setTimeout(() => toast.remove(), 200);
-      }, 2000);
-    }
-
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-  </script>
-</body>
-</html>
+<!-- ... existing code ... -->
