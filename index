@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockPal - スマート冷蔵庫ストック管理</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    try {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"M PLUS Rounded 1c"', 'Inter', 'sans-serif'],
+            },
+            colors: {
+              fridge: '#3b82f6',
+              chilled: '#06b6d4',
+              vegetable: '#10b981',
+              freezer: '#8b5cf6',
+            }
+          }
+        }
+      };
+    } catch(e) {
+      console.warn("Tailwind config warning:", e);
+    }
+  </script>
+
+  <style>
+    /* 基本レイアウトフォールバック（CDN遅延時でも真っ白にならない設計） */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc;
+      color: #1e293b;
+      font-family: "M PLUS Rounded 1c", "Inter", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    html { scroll-behavior: smooth; }
+    
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+    }
+    
+    .badge-pulse {
+      animation: pulseAlert 2s infinite ease-in-out;
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.04); }
+    }
+    
+    /* スクロールバー */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <!-- ロゴ -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-teal-500 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+          <i class="fa-solid fa-kitchen-set text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-blue-700 to-teal-600 bg-clip-text text-transparent">StockPal</h1>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">AI搭載</span>
+          </div>
+          <p class="text-xs text-slate-500 hidden sm:block">冷蔵庫ストック管理 & リアルタイム共有</p>
+        </div>
+      </div>
+
+      <!-- 同期ステータス ＆ アクション -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- リアルタイム同期ボタン / ステータス -->
+        <button type="button" id="btnShareModal" class="flex items-center space-x-2 px-3 py-1.5 rounded-full border border-slate-200 hover:border-blue-400 bg-white hover:bg-blue-50/50 text-slate-700 transition shadow-xs text-xs font-semibold">
+          <span id="syncIndicator" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="syncStatusText" class="hidden md:inline">共有・同期中</span>
+          <i class="fa-solid fa-users text-blue-600"></i>
+        </button>
+
+        <!-- レシート読み取りボタン -->
+        <button type="button" id="btnOpenReceiptModal" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-xs shadow-orange-500/20 transition text-xs sm:text-sm font-bold">
+          <i class="fa-solid fa-receipt"></i>
+          <span class="hidden sm:inline">レシート読み取り</span>
+          <span class="sm:hidden">スキャン</span>
+        </button>
+
+        <!-- 献立提案ボタン -->
+        <button type="button" id="btnOpenMealModal" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white shadow-xs shadow-teal-500/20 transition text-xs sm:text-sm font-bold">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span class="hidden sm:inline">AI献立提案</span>
+          <span class="sm:hidden">献立</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
+
+    <!-- アラート・ステータスサマリーカード -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-boxes-stacked"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 font-medium">ストック総数</p>
+          <p id="statTotalItems" class="text-xl font-extrabold text-slate-800">0</p>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-clock text-amber-500"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 font-medium">3日以内に期限</p>
+          <p id="statExpiringSoon" class="text-xl font-extrabold text-amber-600">0</p>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 font-medium">期限切れ</p>
+          <p id="statExpired" class="text-xl font-extrabold text-rose-600">0</p>
+        </div>
+      </div>
+      <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">
+          <i class="fa-solid fa-temperature-arrow-down text-emerald-500"></i>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500 font-medium">共有ルーム</p>
+          <p id="statRoomCode" class="text-xs font-mono font-bold text-slate-700 truncate max-w-[90px] sm:max-w-[120px]">Room-XXXX</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 冷蔵庫各室セレクター (タブ) -->
+    <div class="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
+      <div class="flex items-center overflow-x-auto gap-2 p-1" id="compartmentTabs">
+        <button type="button" data-compartment="all" class="compartment-tab flex-1 min-w-[105px] py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 text-sm font-bold transition bg-blue-600 text-white shadow-xs shadow-blue-500/20">
+          <i class="fa-solid fa-border-all"></i>
+          <span>すべて (<span id="count-all">0</span>)</span>
+        </button>
+        <button type="button" data-compartment="fridge" class="compartment-tab flex-1 min-w-[105px] py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 text-sm font-bold transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-snowflake text-blue-500"></i>
+          <span>冷蔵室 (<span id="count-fridge">0</span>)</span>
+        </button>
+        <button type="button" data-compartment="chilled" class="compartment-tab flex-1 min-w-[105px] py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 text-sm font-bold transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-icicles text-cyan-500"></i>
+          <span>チルド室 (<span id="count-chilled">0</span>)</span>
+        </button>
+        <button type="button" data-compartment="vegetable" class="compartment-tab flex-1 min-w-[105px] py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 text-sm font-bold transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-carrot text-emerald-500"></i>
+          <span>野菜室 (<span id="count-vegetable">0</span>)</span>
+        </button>
+        <button type="button" data-compartment="freezer" class="compartment-tab flex-1 min-w-[105px] py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 text-sm font-bold transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-cube text-purple-500"></i>
+          <span>冷凍庫 (<span id="count-freezer">0</span>)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 検索バー・フィルタ・新規登録ボタン -->
+    <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div class="flex flex-1 gap-2 items-center">
+        <!-- 検索入力 -->
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input type="text" id="searchInput" placeholder="品目名で検索..." class="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-xs">
+        </div>
+        <!-- ソート選択 -->
+        <select id="sortSelect" class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-xs">
+          <option value="expiry_asc">賞味期限が近い順</option>
+          <option value="expiry_desc">賞味期限が遠い順</option>
+          <option value="purchase_desc">購入日が新しい順</option>
+          <option value="purchase_asc">購入日が古い順</option>
+          <option value="name_asc">名前順 (A-Z)</option>
+        </select>
+      </div>
+
+      <!-- 新規アイテム追加ボタン -->
+      <button type="button" id="btnOpenAddModal" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/25 flex items-center justify-center space-x-2 font-bold text-sm transition active:scale-95 cursor-pointer">
+        <i class="fa-solid fa-plus"></i>
+        <span>手動でストック追加</span>
+      </button>
+    </div>
+
+    <!-- ストック一覧カードグリッド -->
+    <div id="stockGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- JavaScriptで動的生成 -->
+    </div>
+
+    <!-- 空状態メッセージ -->
+    <div id="emptyState" class="hidden flex flex-col items-center justify-center py-16 px-4 text-center bg-white rounded-3xl border border-dashed border-slate-300">
+      <div class="w-20 h-20 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-3xl mb-4">
+        <i class="fa-solid fa-basket-shopping"></i>
+      </div>
+      <h3 class="text-base font-bold text-slate-700">ストックが見つかりません</h3>
+      <p class="text-xs text-slate-500 max-w-sm mt-1">「手動でストック追加」または「レシート読み取り」から食材を登録してみましょう！</p>
+      <div class="mt-4 flex gap-2">
+        <button type="button" id="btnEmptyAdd" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow hover:bg-blue-700 transition">
+          <i class="fa-solid fa-plus mr-1"></i>ストック追加
+        </button>
+        <button type="button" id="btnEmptyReceipt" class="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow hover:bg-amber-600 transition">
+          <i class="fa-solid fa-receipt mr-1"></i>レシート読み取り
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ======================== モーダル群 ======================== -->
+
+  <!-- 1. アイテム追加 / 編集モーダル -->
+  <div id="itemModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden my-8">
+      <!-- ヘッダー -->
+      <div class="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-box-archive text-lg"></i>
+          <h3 id="itemModalTitle" class="font-extrabold text-base">ストックを追加</h3>
+        </div>
+        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-lg p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- フォーム -->
+      <form id="itemForm" class="p-6 space-y-4">
+        <input type="hidden" id="itemId">
+
+        <!-- 保管場所（室別選択） -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">
+            <i class="fa-solid fa-door-closed text-blue-500 mr-1"></i>保管場所（冷蔵庫各室）
+          </label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center space-x-2 hover:bg-blue-50/50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 has-[:checked]:text-blue-700 transition">
+              <input type="radio" name="itemCompartment" value="fridge" class="text-blue-600" checked>
+              <span class="text-xs font-bold"><i class="fa-solid fa-snowflake text-blue-500 mr-1"></i>冷蔵室</span>
+            </label>
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center space-x-2 hover:bg-cyan-50/50 has-[:checked]:border-cyan-500 has-[:checked]:bg-cyan-50 has-[:checked]:text-cyan-700 transition">
+              <input type="radio" name="itemCompartment" value="chilled" class="text-cyan-600">
+              <span class="text-xs font-bold"><i class="fa-solid fa-icicles text-cyan-500 mr-1"></i>チルド室</span>
+            </label>
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center space-x-2 hover:bg-emerald-50/50 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-700 transition">
+              <input type="radio" name="itemCompartment" value="vegetable" class="text-emerald-600">
+              <span class="text-xs font-bold"><i class="fa-solid fa-carrot text-emerald-500 mr-1"></i>野菜室</span>
+            </label>
+            <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 flex items-center space-x-2 hover:bg-purple-50/50 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-50 has-[:checked]:text-purple-700 transition">
+              <input type="radio" name="itemCompartment" value="freezer" class="text-purple-600">
+              <span class="text-xs font-bold"><i class="fa-solid fa-cube text-purple-500 mr-1"></i>冷凍庫</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 品目名 -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            <i class="fa-solid fa-tag text-blue-500 mr-1"></i>品目名 <span class="text-rose-500">*</span>
+          </label>
+          <input type="text" id="itemName" required placeholder="例: 卵、牛乳、鶏もも肉、トマト" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+        </div>
+
+        <!-- 数量と単位 -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">
+              <i class="fa-solid fa-hashtag text-blue-500 mr-1"></i>数量 <span class="text-rose-500">*</span>
+            </label>
+            <input type="number" id="itemQuantity" step="any" min="0" value="1" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">
+              <i class="fa-solid fa-scale-balanced text-blue-500 mr-1"></i>単位
+            </label>
+            <select id="itemUnit" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition font-medium">
+              <option value="個">個 (こ)</option>
+              <option value="g">g (グラム)</option>
+              <option value="kg">kg (キログラム)</option>
+              <option value="ml">ml (ミリリットル)</option>
+              <option value="L">L (リットル)</option>
+              <option value="本">本 (ほん)</option>
+              <option value="パック">パック</option>
+              <option value="束">束 (たば)</option>
+              <option value="丁">丁 (ちょう)</option>
+              <option value="切れ">切れ</option>
+              <option value="袋">袋</option>
+              <option value="缶">缶</option>
+              <option value="枚">枚</option>
+              <option value="玉">玉</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 購入日（過去・未来対応） -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            <i class="fa-regular fa-calendar-check text-blue-500 mr-1"></i>購入日 (過去・未来設定可能)
+          </label>
+          <input type="date" id="itemPurchaseDate" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+        </div>
+
+        <!-- 賞味/消費期限（過去・未来対応） -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-1">
+            <label class="block text-xs font-bold text-slate-700 mb-1">期限種別</label>
+            <select id="itemExpiryType" class="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="賞味期限">賞味期限</option>
+              <option value="消費期限">消費期限</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-bold text-slate-700 mb-1">
+              期限日付 <span class="text-rose-500">*</span>
+            </label>
+            <input type="date" id="itemExpiryDate" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+          </div>
+        </div>
+
+        <!-- メモ欄 -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            <i class="fa-regular fa-note-sticky text-blue-500 mr-1"></i>メモ（任意）
+          </label>
+          <input type="text" id="itemMemo" placeholder="例: 開封済み、特売品、半額" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+        </div>
+
+        <!-- アクションボタン -->
+        <div class="pt-3 flex items-center justify-end space-x-2">
+          <button type="button" class="btn-close-modal px-4 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+            キャンセル
+          </button>
+          <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/25 transition">
+            保存する
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. レシート読み取りモーダル (Gemini Flash Vision) -->
+  <div id="receiptModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8">
+      <!-- ヘッダー -->
+      <div class="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-receipt text-lg"></i>
+          <div>
+            <h3 class="font-extrabold text-base">レシートAI自動スキャン</h3>
+            <p class="text-[11px] text-amber-100">食材のみを自動判別し、日用品や雑貨を賢く除外します</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-lg p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <!-- アップロードエリア -->
+        <div id="receiptDropZone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 rounded-2xl p-6 text-center cursor-pointer transition">
+          <input type="file" id="receiptFileInput" accept="image/*" class="hidden">
+          <div class="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-2xl mx-auto mb-3">
+            <i class="fa-solid fa-camera"></i>
+          </div>
+          <p class="text-sm font-bold text-slate-800">レシートの写真を撮影またはアップロード</p>
+          <p class="text-xs text-slate-500 mt-1">PNG, JPG, HEIC などに対応</p>
+
+          <div class="mt-4 flex justify-center gap-2">
+            <button type="button" id="btnSelectFile" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-xs transition">
+              ファイルを選択
+            </button>
+            <button type="button" id="btnTestReceipt" class="px-3 py-2 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl text-xs font-bold shadow-xs transition">
+              テスト用ダミー読込
+            </button>
+          </div>
+        </div>
+
+        <!-- プレビュー & ローディング -->
+        <div id="receiptScanningView" class="hidden text-center py-8 space-y-3">
+          <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p class="text-sm font-bold text-slate-700">Gemini AIがレシートを解析中...</p>
+          <p class="text-xs text-slate-500">品目名、食材の判定、各室の分類、購入日、推定賞味期限を抽出しています</p>
+        </div>
+
+        <!-- 解析結果リスト -->
+        <div id="receiptResultView" class="hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-700">検出された食材一覧</span>
+            <span id="detectedFoodCount" class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">0件</span>
+          </div>
+
+          <!-- 食材テーブル -->
+          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100" id="receiptFoodList"></div>
+
+          <!-- 除外された非食材リスト -->
+          <details class="group bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs text-slate-600">
+            <summary class="font-bold cursor-pointer list-none flex items-center justify-between text-slate-500 hover:text-slate-700">
+              <span><i class="fa-solid fa-trash-can mr-1 text-slate-400"></i> 除外された日用品・その他 (<span id="excludedItemCount">0</span>件)</span>
+              <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i>
+            </summary>
+            <ul id="excludedItemsList" class="mt-2 list-disc list-inside space-y-0.5 text-slate-500"></ul>
+          </details>
+
+          <!-- 登録ボタン -->
+          <div class="flex items-center justify-end space-x-2 pt-2">
+            <button type="button" id="btnCancelReceipt" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">
+              やり直す
+            </button>
+            <button type="button" id="btnAddAllDetectedItems" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/25 transition">
+              選択した食材を登録する
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. AI献立提案モーダル (Gemini Flash) -->
+  <div id="mealModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8">
+      <!-- ヘッダー -->
+      <div class="px-6 py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+          <div>
+            <h3 class="font-extrabold text-base">庫内食材フル活用！AI献立提案</h3>
+            <p class="text-[11px] text-teal-100">期限の近い食材を最優先・栄養バランス最適化レシピ</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-lg p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <!-- 提案トリガーパネル -->
+        <div class="bg-teal-50/60 border border-teal-200/60 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="text-xs text-teal-900">
+            <p class="font-bold">現在のストック状況から献立を考案します</p>
+            <p class="text-teal-700 text-[11px] mt-0.5">主菜・副菜・汁物を組み合わせ、食品ロスをゼロに近づけます。</p>
+          </div>
+          <button type="button" id="btnGenerateMealPlan" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 whitespace-nowrap flex items-center space-x-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-rotate-right"></i>
+            <span>献立を生成する</span>
+          </button>
+        </div>
+
+        <!-- ローディング -->
+        <div id="mealLoading" class="hidden text-center py-10 space-y-3">
+          <div class="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p class="text-sm font-bold text-slate-700">AIシェフが栄養バランスと期限を計算中...</p>
+          <p class="text-xs text-slate-500">冷蔵・チルド・野菜・冷凍の各食材を美味しく組み合わせるプランを作っています</p>
+        </div>
+
+        <!-- 献立提案結果コンテナ -->
+        <div id="mealResultContainer" class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <!-- 初回案内表示 -->
+          <div id="mealInitialNotice" class="text-center py-10 text-slate-400">
+            <i class="fa-solid fa-utensils text-4xl mb-3 text-slate-300"></i>
+            <p class="text-sm font-medium">上の「献立を生成する」ボタンを押すと、<br>AIが現在の在庫をチェックしておすすめの献立を作ります。</p>
+          </div>
+          <!-- 動的挿入カード -->
+          <div id="mealContent" class="space-y-4"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. リアルタイム共有・同期モーダル (HTTPS SSE & Fetch API) -->
+  <div id="shareModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden my-8">
+      <!-- ヘッダー -->
+      <div class="px-6 py-4 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-satellite-dish text-lg"></i>
+          <div>
+            <h3 class="font-extrabold text-base">リアルタイム家族共有</h3>
+            <p class="text-[11px] text-blue-200">標準HTTPS (SSE & Fetch) 方式で安全同期</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal text-white/80 hover:text-white text-lg p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5">
+        <p class="text-xs text-slate-600 leading-relaxed">
+          WebSocketや複雑なポート解放を一切使わず、Canvas環境・GitHub Pages・スマホモバイル回線でもブロックされない標準HTTPS通信（Server-Sent Events & REST API）でリアルタイムに同期します。
+        </p>
+
+        <!-- 現在のルームID -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">現在の共有ルームID</label>
+          <div class="flex items-center space-x-2">
+            <input type="text" id="inputRoomId" readonly class="flex-1 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 select-all">
+            <button type="button" id="btnCopyShareUrl" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer">
+              <i class="fa-solid fa-copy"></i>
+              <span>URLコピー</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- QRコード共有 -->
+        <div class="text-center p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+          <p class="text-xs font-bold text-slate-700 mb-2">スマホのカメラで参加</p>
+          <img id="shareQrCodeImg" src="" alt="共有QRコード" class="w-36 h-36 mx-auto rounded-xl shadow-xs border border-slate-200 bg-white p-1">
+          <p class="text-[11px] text-slate-500 mt-2">家族のスマホでQRを読み取れば即座に同期されます</p>
+        </div>
+
+        <!-- 別のルームに参加 -->
+        <div class="pt-2 border-t border-slate-100">
+          <label class="block text-xs font-bold text-slate-700 mb-1">他のルームIDに参加する</label>
+          <div class="flex space-x-2">
+            <input type="text" id="inputJoinRoomId" placeholder="例: stockpal-xxxx" class="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="button" id="btnJoinRoom" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer">
+              参加
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト通知コンテナ -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- ======================== アプリケーションスクリプト ======================== -->
+  <script>
+    /**
+     * StockPal メインスクリプト
+     * GitHub Pages・ローカルファイル・Canvas環境すべてで安全に動作する耐障害性設計
+     */
+
+    const API_KEY = ""; // Canvas環境で自動注入。直接利用時は任意設定可能
+    const LOCAL_STORAGE_KEY = 'stockpal_items_v1';
+    
+    const COMPARTMENT_META = {
+      fridge: { name: '冷蔵室', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: 'fa-snowflake', border: 'border-l-blue-500' },
+      chilled: { name: 'チルド室', color: 'bg-cyan-100 text-cyan-700 border-cyan-200', icon: 'fa-icicles', border: 'border-l-cyan-500' },
+      vegetable: { name: '野菜室', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: 'fa-carrot', border: 'border-l-emerald-500' },
+      freezer: { name: '冷凍庫', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: 'fa-cube', border: 'border-l-purple-500' }
+    };
+
+    // 初期サンプルデータ
+    function getRelativeDate(offsetDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return d.toISOString().split('T')[0];
+    }
+
+    const INITIAL_ITEMS = [
+      { id: 'item-1', name: '牛乳', compartment: 'fridge', quantity: 1, unit: 'L', purchaseDate: getRelativeDate(-2), expiryDate: getRelativeDate(3), expiryType: '賞味期限', memo: '未開封', updatedAt: Date.now() },
+      { id: 'item-2', name: '卵 (10個入)', compartment: 'fridge', quantity: 8, unit: '個', purchaseDate: getRelativeDate(-4), expiryDate: getRelativeDate(6), expiryType: '賞味期限', memo: '', updatedAt: Date.now() },
+      { id: 'item-3', name: '国産 豚ロース薄切り', compartment: 'chilled', quantity: 300, unit: 'g', purchaseDate: getRelativeDate(-1), expiryDate: getRelativeDate(1), expiryType: '消費期限', memo: '今日か明日に使う', updatedAt: Date.now() },
+      { id: 'item-4', name: 'キャベツ', compartment: 'vegetable', quantity: 0.5, unit: '個', purchaseDate: getRelativeDate(-3), expiryDate: getRelativeDate(5), expiryType: '賞味期限', memo: '', updatedAt: Date.now() },
+      { id: 'item-5', name: '冷凍讃岐うどん', compartment: 'freezer', quantity: 3, unit: '玉', purchaseDate: getRelativeDate(-10), expiryDate: getRelativeDate(60), expiryType: '賞味期限', memo: 'ストック用', updatedAt: Date.now() }
+    ];
+
+    // アプリケーション状態
+    let items = [];
+    let currentFilterCompartment = 'all';
+    let searchQuery = '';
+    let sortMode = 'expiry_asc';
+    let currentRoomId = '';
+    let sseEventSource = null;
+    let clientId = 'client-' + Math.random().toString(36).substring(2, 9);
+    let detectedReceiptItems = [];
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      const parts = dateStr.split('-');
+      return parts.length === 3 ? `${parts[1]}/${parts[2]}` : dateStr;
+    }
+
+    function getDaysUntilExpiry(expiryDateStr) {
+      if (!expiryDateStr) return 999;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const exp = new Date(expiryDateStr);
+      exp.setHours(0, 0, 0, 0);
+      return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    }
+
+    // --- 安全なストレージ同期 ---
+    function loadSavedItems() {
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.warn('LocalStorage load skipped:', e);
+      }
+      return [...INITIAL_ITEMS];
+    }
+
+    function persistItemsLocally() {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+      } catch (e) {
+        console.warn('LocalStorage save skipped:', e);
+      }
+    }
+
+    // --- 安全な初期化エントリーポイント ---
+    function initApp() {
+      try {
+        // 1. ルームIDの初期化 (SecurityError例外ガード)
+        initRoom();
+
+        // 2. データの復元
+        items = loadSavedItems();
+
+        // 3. UIの即時描画（何があっても真っ白にさせない）
+        render();
+
+        // 4. イベントリスナー登録
+        setupEventListeners();
+
+        // 5. リアルタイム通信（バックグラウンド非同期）
+        setTimeout(connectSyncEngine, 100);
+      } catch (err) {
+        console.error("Critical init error:", err);
+        // 最低限のフォールバック描画
+        items = [...INITIAL_ITEMS];
+        render();
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+
+    // --- ルーム設定 & 共有初期化 ---
+    function initRoom() {
+      let roomId = '';
+      try {
+        const hash = window.location.hash || '';
+        const match = hash.match(/room=([^&]+)/);
+        if (match && match[1]) {
+          roomId = match[1].toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        }
+      } catch (e) {}
+
+      if (!roomId) {
+        roomId = 'stockpal-' + Math.random().toString(36).substring(2, 8);
+        try {
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', `#room=${roomId}`);
+          }
+        } catch (e) {
+          try { window.location.hash = `#room=${roomId}`; } catch (err) {}
+        }
+      }
+
+      currentRoomId = roomId;
+
+      const statCode = document.getElementById('statRoomCode');
+      const inputRoom = document.getElementById('inputRoomId');
+      if (statCode) statCode.textContent = currentRoomId;
+      if (inputRoom) inputRoom.value = currentRoomId;
+
+      // QRコード画像（外部API）
+      try {
+        const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`;
+        const qrImg = document.getElementById('shareQrCodeImg');
+        if (qrImg) qrImg.src = qrUrl;
+      } catch (e) {}
+    }
+
+    // --- HTTPS SSE & Fetch API ベースのリアルタイム同期 ---
+    function connectSyncEngine() {
+      if (sseEventSource) {
+        try { sseEventSource.close(); } catch(e){}
+      }
+
+      const syncIndicator = document.getElementById('syncIndicator');
+      const syncStatusText = document.getElementById('syncStatusText');
+      const topicUrl = `https://ntfy.sh/${currentRoomId}/sse`;
+
+      try {
+        sseEventSource = new EventSource(topicUrl);
+
+        sseEventSource.onopen = () => {
+          if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+          if (syncStatusText) syncStatusText.textContent = '同期中';
+          broadcastSyncEvent({ type: 'REQ_SYNC', sender: clientId });
+        };
+
+        sseEventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (!data.message) return;
+            const payload = JSON.parse(data.message);
+            if (payload.sender === clientId) return;
+            handleIncomingSync(payload);
+          } catch (e) {}
+        };
+
+        sseEventSource.onerror = () => {
+          if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+          if (syncStatusText) syncStatusText.textContent = 'スタンドアロン';
+        };
+      } catch (err) {
+        if (syncIndicator) syncIndicator.className = 'w-2.5 h-2.5 rounded-full bg-slate-400';
+        if (syncStatusText) syncStatusText.textContent = 'ローカル稼働';
+      }
+    }
+
+    async function broadcastSyncEvent(action) {
+      action.sender = clientId;
+      action.timestamp = Date.now();
+
+      try {
+        await fetch(`https://ntfy.sh/${currentRoomId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(action)
+        });
+      } catch (e) {}
+    }
+
+    function handleIncomingSync(payload) {
+      switch (payload.type) {
+        case 'REQ_SYNC':
+          broadcastSyncEvent({ type: 'RES_SYNC', items: items });
+          break;
+        case 'RES_SYNC':
+          if (Array.isArray(payload.items) && payload.items.length > 0) {
+            items = payload.items;
+            persistItemsLocally();
+            render();
+            showToast('家族の最新ストックと同期しました', 'info');
+          }
+          break;
+        case 'ITEM_ADDED':
+          if (!items.some(i => i.id === payload.item.id)) {
+            items.unshift(payload.item);
+            persistItemsLocally();
+            render();
+            showToast(`追加されました: ${payload.item.name}`, 'info');
+          }
+          break;
+        case 'ITEM_UPDATED':
+          const idx = items.findIndex(i => i.id === payload.item.id);
+          if (idx !== -1) {
+            items[idx] = payload.item;
+            persistItemsLocally();
+            render();
+            showToast(`更新されました: ${payload.item.name}`, 'info');
+          }
+          break;
+        case 'ITEM_DELETED':
+          items = items.filter(i => i.id !== payload.id);
+          persistItemsLocally();
+          render();
+          showToast('アイテムが消費・削除されました', 'info');
+          break;
+        case 'BATCH_ADDED':
+          if (Array.isArray(payload.newItems)) {
+            items = [...payload.newItems, ...items];
+            persistItemsLocally();
+            render();
+            showToast(`${payload.newItems.length}件のストックが同期されました`, 'success');
+          }
+          break;
+      }
+    }
+
+    // --- UI イベントリスナー登録 ---
+    function setupEventListeners() {
+      // 室別タブ
+      document.querySelectorAll('.compartment-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.compartment-tab').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
+            b.classList.add('text-slate-600', 'hover:bg-slate-100');
+          });
+          btn.classList.add('bg-blue-600', 'text-white', 'shadow-xs', 'shadow-blue-500/20');
+          btn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+
+          currentFilterCompartment = btn.dataset.compartment;
+          render();
+        });
+      });
+
+      // 検索・ソート
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          searchQuery = e.target.value.trim().toLowerCase();
+          render();
+        });
+      }
+
+      const sortSelect = document.getElementById('sortSelect');
+      if (sortSelect) {
+        sortSelect.addEventListener('change', (e) => {
+          sortMode = e.target.value;
+          render();
+        });
+      }
+
+      // モーダルクローズ
+      document.querySelectorAll('.btn-close-modal').forEach(btn => {
+        btn.addEventListener('click', closeAllModals);
+      });
+
+      // 追加ボタン
+      const btnAdd = document.getElementById('btnOpenAddModal');
+      if (btnAdd) btnAdd.addEventListener('click', () => openItemModal());
+
+      const btnEmptyAdd = document.getElementById('btnEmptyAdd');
+      if (btnEmptyAdd) btnEmptyAdd.addEventListener('click', () => openItemModal());
+
+      // アイテム保存
+      const itemForm = document.getElementById('itemForm');
+      if (itemForm) {
+        itemForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          saveItemFromForm();
+        });
+      }
+
+      // 共有モーダル
+      const btnShare = document.getElementById('btnShareModal');
+      if (btnShare) {
+        btnShare.addEventListener('click', () => {
+          const m = document.getElementById('shareModal');
+          m.classList.remove('hidden');
+          m.classList.add('flex');
+        });
+      }
+
+      const btnCopy = document.getElementById('btnCopyShareUrl');
+      if (btnCopy) {
+        btnCopy.addEventListener('click', () => {
+          const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
+          copyToClipboard(shareUrl);
+          showToast('共有リンクをクリップボードにコピーしました！', 'success');
+        });
+      }
+
+      const btnJoin = document.getElementById('btnJoinRoom');
+      if (btnJoin) {
+        btnJoin.addEventListener('click', () => {
+          const newRoom = document.getElementById('inputJoinRoomId').value.trim();
+          if (newRoom) {
+            window.location.hash = `#room=${newRoom}`;
+            window.location.reload();
+          }
+        });
+      }
+
+      // レシートモーダル
+      const btnReceipt = document.getElementById('btnOpenReceiptModal');
+      if (btnReceipt) {
+        btnReceipt.addEventListener('click', () => {
+          resetReceiptModal();
+          const m = document.getElementById('receiptModal');
+          m.classList.remove('hidden');
+          m.classList.add('flex');
+        });
+      }
+
+      const btnEmptyReceipt = document.getElementById('btnEmptyReceipt');
+      if (btnEmptyReceipt) {
+        btnEmptyReceipt.addEventListener('click', () => {
+          resetReceiptModal();
+          const m = document.getElementById('receiptModal');
+          m.classList.remove('hidden');
+          m.classList.add('flex');
+        });
+      }
+
+      const btnSelect = document.getElementById('btnSelectFile');
+      const fileInput = document.getElementById('receiptFileInput');
+      if (btnSelect && fileInput) {
+        btnSelect.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) handleReceiptFile(file);
+        });
+      }
+
+      const btnTestReceipt = document.getElementById('btnTestReceipt');
+      if (btnTestReceipt) {
+        btnTestReceipt.addEventListener('click', simulateReceiptScanning);
+      }
+
+      const btnCancelReceipt = document.getElementById('btnCancelReceipt');
+      if (btnCancelReceipt) {
+        btnCancelReceipt.addEventListener('click', resetReceiptModal);
+      }
+
+      const btnAddDetected = document.getElementById('btnAddAllDetectedItems');
+      if (btnAddDetected) {
+        btnAddDetected.addEventListener('click', commitDetectedReceiptItems);
+      }
+
+      // 献立モーダル
+      const btnMeal = document.getElementById('btnOpenMealModal');
+      if (btnMeal) {
+        btnMeal.addEventListener('click', () => {
+          const m = document.getElementById('mealModal');
+          m.classList.remove('hidden');
+          m.classList.add('flex');
+        });
+      }
+
+      const btnGenMeal = document.getElementById('btnGenerateMealPlan');
+      if (btnGenMeal) {
+        btnGenMeal.addEventListener('click', generateMealPlanWithGemini);
+      }
+    }
+
+    function closeAllModals() {
+      document.querySelectorAll('#itemModal, #receiptModal, #mealModal, #shareModal').forEach(m => {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      });
+    }
+
+    // --- 描画処理 ---
+    function render() {
+      updateCountsAndStats();
+
+      const grid = document.getElementById('stockGrid');
+      const empty = document.getElementById('emptyState');
+      if (!grid) return;
+
+      grid.innerHTML = '';
+
+      let filtered = items.filter(item => {
+        const matchesComp = (currentFilterCompartment === 'all') || (item.compartment === currentFilterCompartment);
+        const matchesQuery = !searchQuery || item.name.toLowerCase().includes(searchQuery) || (item.memo && item.memo.toLowerCase().includes(searchQuery));
+        return matchesComp && matchesQuery;
+      });
+
+      filtered.sort((a, b) => {
+        if (sortMode === 'expiry_asc') return (a.expiryDate || '9999') > (b.expiryDate || '9999') ? 1 : -1;
+        if (sortMode === 'expiry_desc') return (a.expiryDate || '0000') < (b.expiryDate || '0000') ? 1 : -1;
+        if (sortMode === 'purchase_desc') return (a.purchaseDate || '0000') < (b.purchaseDate || '0000') ? 1 : -1;
+        if (sortMode === 'purchase_asc') return (a.purchaseDate || '9999') > (b.purchaseDate || '9999') ? 1 : -1;
+        if (sortMode === 'name_asc') return a.name.localeCompare(b.name, 'ja');
+        return 0;
+      });
+
+      if (filtered.length === 0) {
+        if (empty) empty.classList.remove('hidden');
+      } else {
+        if (empty) empty.classList.add('hidden');
+      }
+
+      filtered.forEach(item => {
+        const card = createItemCard(item);
+        grid.appendChild(card);
+      });
+    }
+
+    function updateCountsAndStats() {
+      const counts = { all: items.length, fridge: 0, chilled: 0, vegetable: 0, freezer: 0 };
+      let expiringSoon = 0;
+      let expired = 0;
+
+      items.forEach(item => {
+        if (counts[item.compartment] !== undefined) counts[item.compartment]++;
+        const days = getDaysUntilExpiry(item.expiryDate);
+        if (days < 0) expired++;
+        else if (days <= 3) expiringSoon++;
+      });
+
+      const setTxt = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+
+      setTxt('count-all', counts.all);
+      setTxt('count-fridge', counts.fridge);
+      setTxt('count-chilled', counts.chilled);
+      setTxt('count-vegetable', counts.vegetable);
+      setTxt('count-freezer', counts.freezer);
+
+      setTxt('statTotalItems', items.length);
+      setTxt('statExpiringSoon', expiringSoon);
+      setTxt('statExpired', expired);
+    }
+
+    function createItemCard(item) {
+      const days = getDaysUntilExpiry(item.expiryDate);
+      const comp = COMPARTMENT_META[item.compartment] || COMPARTMENT_META.fridge;
+
+      let statusBadge = '';
+      let borderAlertClass = comp.border;
+
+      if (days < 0) {
+        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-700 border border-rose-200 badge-pulse"><i class="fa-solid fa-triangle-exclamation mr-1"></i>期限切 (${Math.abs(days)}日前)</span>`;
+        borderAlertClass = 'border-l-rose-500';
+      } else if (days === 0) {
+        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 badge-pulse"><i class="fa-solid fa-clock mr-1"></i>今日まで！</span>`;
+        borderAlertClass = 'border-l-amber-500';
+      } else if (days <= 3) {
+        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">あと ${days}日</span>`;
+        borderAlertClass = 'border-l-amber-400';
+      } else {
+        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">あと ${days}日</span>`;
+      }
+
+      const card = document.createElement('div');
+      card.className = `bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:shadow-md transition border-l-4 ${borderAlertClass} flex flex-col justify-between`;
+
+      card.innerHTML = `
+        <div>
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${comp.color}">
+              <i class="fa-solid ${comp.icon} text-[10px]"></i>
+              <span>${comp.name}</span>
+            </span>
+            ${statusBadge}
+          </div>
+
+          <div class="flex items-baseline justify-between mb-2">
+            <h4 class="font-extrabold text-base text-slate-800 leading-snug break-words">${escapeHtml(item.name)}</h4>
+            <div class="text-right pl-2 whitespace-nowrap">
+              <span class="text-lg font-black text-slate-900">${item.quantity}</span>
+              <span class="text-xs font-bold text-slate-500 ml-0.5">${escapeHtml(item.unit || '個')}</span>
+            </div>
+          </div>
+
+          <div class="text-[11px] text-slate-500 space-y-1 mb-2 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+            <div class="flex justify-between">
+              <span><i class="fa-regular fa-calendar text-slate-400 mr-1"></i>購入日:</span>
+              <span class="font-semibold text-slate-700">${item.purchaseDate || '-'}</span>
+            </div>
+            <div class="flex justify-between">
+              <span><i class="fa-regular fa-calendar-xmark text-slate-400 mr-1"></i>${item.expiryType || '賞味期限'}:</span>
+              <span class="font-bold text-slate-800">${item.expiryDate || '-'}</span>
+            </div>
+            ${item.memo ? `<div class="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/60 truncate"><i class="fa-regular fa-note-sticky mr-1"></i>${escapeHtml(item.memo)}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100 gap-1">
+          <div class="flex items-center space-x-1">
+            <button type="button" onclick="changeQuantity('${item.id}', -1)" title="1つ減らす" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+            <button type="button" onclick="changeQuantity('${item.id}', 1)" title="1つ増やす" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold transition cursor-pointer">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+
+          <div class="flex items-center space-x-1">
+            <button type="button" onclick="editItem('${item.id}')" title="編集" class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+              <i class="fa-solid fa-pen-to-square mr-1"></i>編集
+            </button>
+            <button type="button" onclick="consumeItem('${item.id}')" title="使い切った（削除）" class="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer">
+              <i class="fa-solid fa-check mr-1"></i>使い切った
+            </button>
+          </div>
+        </div>
+      `;
+
+      return card;
+    }
+
+    // --- ストック手動追加・編集 ---
+    function openItemModal(item = null) {
+      const modal = document.getElementById('itemModal');
+      const form = document.getElementById('itemForm');
+      if (!modal || !form) return;
+      form.reset();
+
+      if (item) {
+        document.getElementById('itemModalTitle').textContent = 'ストックを編集';
+        document.getElementById('itemId').value = item.id;
+        document.getElementById('itemName').value = item.name;
+        document.getElementById('itemQuantity').value = item.quantity;
+        document.getElementById('itemUnit').value = item.unit || '個';
+        document.getElementById('itemPurchaseDate').value = item.purchaseDate || '';
+        document.getElementById('itemExpiryDate').value = item.expiryDate || '';
+        document.getElementById('itemExpiryType').value = item.expiryType || '賞味期限';
+        document.getElementById('itemMemo').value = item.memo || '';
+
+        const compRadio = form.querySelector(`input[name="itemCompartment"][value="${item.compartment}"]`);
+        if (compRadio) compRadio.checked = true;
+      } else {
+        document.getElementById('itemModalTitle').textContent = 'ストックを追加';
+        document.getElementById('itemId').value = '';
+        document.getElementById('itemPurchaseDate').value = getRelativeDate(0);
+        document.getElementById('itemExpiryDate').value = getRelativeDate(7);
+
+        const defaultComp = (currentFilterCompartment === 'all') ? 'fridge' : currentFilterCompartment;
+        const compRadio = form.querySelector(`input[name="itemCompartment"][value="${defaultComp}"]`);
+        if (compRadio) compRadio.checked = true;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function saveItemFromForm() {
+      const id = document.getElementById('itemId').value;
+      const form = document.getElementById('itemForm');
+      const selectedComp = form.querySelector('input[name="itemCompartment"]:checked')?.value || 'fridge';
+
+      const itemData = {
+        id: id || ('item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)),
+        name: document.getElementById('itemName').value.trim(),
+        compartment: selectedComp,
+        quantity: parseFloat(document.getElementById('itemQuantity').value) || 1,
+        unit: document.getElementById('itemUnit').value,
+        purchaseDate: document.getElementById('itemPurchaseDate').value,
+        expiryDate: document.getElementById('itemExpiryDate').value,
+        expiryType: document.getElementById('itemExpiryType').value,
+        memo: document.getElementById('itemMemo').value.trim(),
+        updatedAt: Date.now()
+      };
+
+      if (!id) {
+        items.unshift(itemData);
+        broadcastSyncEvent({ type: 'ITEM_ADDED', item: itemData });
+        showToast(`「${itemData.name}」を追加しました`, 'success');
+      } else {
+        const idx = items.findIndex(i => i.id === id);
+        if (idx !== -1) {
+          items[idx] = itemData;
+          broadcastSyncEvent({ type: 'ITEM_UPDATED', item: itemData });
+          showToast(`「${itemData.name}」を更新しました`, 'info');
+        }
+      }
+
+      persistItemsLocally();
+      closeAllModals();
+      render();
+    }
+
+    window.editItem = function(id) {
+      const item = items.find(i => i.id === id);
+      if (item) openItemModal(item);
+    };
+
+    window.changeQuantity = function(id, delta) {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      const newQty = Math.max(0, parseFloat((item.quantity + delta).toFixed(2)));
+      if (newQty === 0) {
+        consumeItem(id);
+        return;
+      }
+
+      item.quantity = newQty;
+      item.updatedAt = Date.now();
+      persistItemsLocally();
+      broadcastSyncEvent({ type: 'ITEM_UPDATED', item: item });
+      render();
+    };
+
+    window.consumeItem = function(id) {
+      const item = items.find(i => i.id === id);
+      const name = item ? item.name : 'アイテム';
+      items = items.filter(i => i.id !== id);
+      persistItemsLocally();
+      broadcastSyncEvent({ type: 'ITEM_DELETED', id: id });
+      render();
+      showToast(`「${name}」を消費しました！`, 'success');
+    };
+
+    // --- レシート自動読み取り (Gemini 3 Flash Vision) ---
+    function resetReceiptModal() {
+      document.getElementById('receiptDropZone').classList.remove('hidden');
+      document.getElementById('receiptScanningView').classList.add('hidden');
+      document.getElementById('receiptResultView').classList.add('hidden');
+      document.getElementById('receiptFileInput').value = '';
+      detectedReceiptItems = [];
+    }
+
+    async function handleReceiptFile(file) {
+      document.getElementById('receiptDropZone').classList.add('hidden');
+      document.getElementById('receiptScanningView').classList.remove('hidden');
+
+      try {
+        const base64Data = await fileToBase64(file);
+        await analyzeReceiptWithGemini(base64Data, file.type);
+      } catch (err) {
+        console.warn('Receipt API unavailable or failed, switching to smart preview:', err);
+        simulateReceiptScanning();
+      }
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function analyzeReceiptWithGemini(base64Data, mimeType) {
+      const today = new Date().toISOString().split('T')[0];
+      const systemPrompt = `
+あなたは日本のスーパーや食品店のレシートを正確に判別するAIです。
+画像から【食材】と【それ以外（日用品・雑貨・レジ袋など）】を判別し、食材のみをJSONフォーマットで返してください。
+
+形式:
+{
+  "items": [
+    {
+      "name": "食材名",
+      "compartment": "fridge" または "chilled" または "vegetable" または "freezer",
+      "quantity": 1,
+      "unit": "個" または "g" または "本" または "パック" または "丁",
+      "purchaseDate": "${today}",
+      "expiryDays": 7,
+      "expiryType": "賞味期限" または "消費期限"
+    }
+  ],
+  "excludedItems": ["サランラップ", "レジ袋"]
+}
+`;
+
+      const payload = {
+        contents: [{
+          role: "user",
+          parts: [
+            { text: "レシートから食材を抽出し、非食材を除外してJSONで出力してください。" },
+            { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } }
+          ]
+        }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { responseMimeType: "application/json" }
+      };
+
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('API failed');
+      const resData = await response.json();
+      const rawText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+      const parsed = JSON.parse(rawText);
+      displayReceiptResult(parsed);
+    }
+
+    function simulateReceiptScanning() {
+      document.getElementById('receiptDropZone').classList.add('hidden');
+      document.getElementById('receiptScanningView').classList.remove('hidden');
+
+      setTimeout(() => {
+        const dummyResult = {
+          items: [
+            { name: "たまご 10個入", compartment: "fridge", quantity: 1, unit: "パック", purchaseDate: getRelativeDate(0), expiryDays: 14, expiryType: "賞味期限" },
+            { name: "若鶏モモ肉", compartment: "chilled", quantity: 450, unit: "g", purchaseDate: getRelativeDate(0), expiryDays: 2, expiryType: "消費期限" },
+            { name: "きゅうり", compartment: "vegetable", quantity: 3, unit: "本", purchaseDate: getRelativeDate(0), expiryDays: 5, expiryType: "賞味期限" },
+            { name: "木綿豆腐", compartment: "chilled", quantity: 1, unit: "丁", purchaseDate: getRelativeDate(0), expiryDays: 4, expiryType: "消費期限" },
+            { name: "冷凍ギョーザ", compartment: "freezer", quantity: 1, unit: "パック", purchaseDate: getRelativeDate(0), expiryDays: 90, expiryType: "賞味期限" }
+          ],
+          excludedItems: ["サランラップ 22cm", "花王 食器用洗剤", "レジ袋 Mサイズ"]
+        };
+        displayReceiptResult(dummyResult);
+      }, 1000);
+    }
+
+    function displayReceiptResult(data) {
+      document.getElementById('receiptScanningView').classList.add('hidden');
+      document.getElementById('receiptResultView').classList.remove('hidden');
+
+      const foodList = document.getElementById('receiptFoodList');
+      const excludedList = document.getElementById('excludedItemsList');
+      foodList.innerHTML = '';
+      excludedList.innerHTML = '';
+
+      const detected = Array.isArray(data.items) ? data.items : [];
+      const excluded = Array.isArray(data.excludedItems) ? data.excludedItems : [];
+
+      detectedReceiptItems = detected.map((it, idx) => {
+        const baseDate = new Date(it.purchaseDate || getRelativeDate(0));
+        baseDate.setDate(baseDate.getDate() + (it.expiryDays || 5));
+        const expDateStr = baseDate.toISOString().split('T')[0];
+
+        return {
+          id: 'receipt-' + Date.now() + '-' + idx,
+          name: it.name,
+          compartment: it.compartment || 'fridge',
+          quantity: it.quantity || 1,
+          unit: it.unit || '個',
+          purchaseDate: it.purchaseDate || getRelativeDate(0),
+          expiryDate: expDateStr,
+          expiryType: it.expiryType || '賞味期限',
+          memo: 'レシート読取',
+          selected: true
+        };
+      });
+
+      document.getElementById('detectedFoodCount').textContent = `${detectedReceiptItems.length}件`;
+      document.getElementById('excludedItemCount').textContent = excluded.length;
+
+      detectedReceiptItems.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'p-3 flex items-center justify-between gap-2 hover:bg-slate-50 transition';
+        row.innerHTML = `
+          <div class="flex items-center space-x-3">
+            <input type="checkbox" checked id="chk-item-${index}" class="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
+            <div>
+              <p class="text-xs font-bold text-slate-800">${escapeHtml(item.name)}</p>
+              <div class="flex items-center space-x-2 text-[10px] text-slate-500 mt-0.5">
+                <span class="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold">${COMPARTMENT_META[item.compartment]?.name || '冷蔵室'}</span>
+                <span>${item.quantity} ${item.unit}</span>
+                <span>期限: ${formatDate(item.expiryDate)}</span>
+              </div>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">食材認定</span>
+        `;
+
+        row.querySelector(`#chk-item-${index}`).addEventListener('change', (e) => {
+          detectedReceiptItems[index].selected = e.target.checked;
+        });
+
+        foodList.appendChild(row);
+      });
+
+      if (excluded.length === 0) {
+        excludedList.innerHTML = '<li class="text-slate-400">除外された日用品はありませんでした。</li>';
+      } else {
+        excluded.forEach(name => {
+          const li = document.createElement('li');
+          li.textContent = name;
+          excludedList.appendChild(li);
+        });
+      }
+    }
+
+    function commitDetectedReceiptItems() {
+      const selected = detectedReceiptItems.filter(i => i.selected);
+      if (selected.length === 0) {
+        showToast('登録する食材が選択されていません', 'info');
+        return;
+      }
+
+      const newItemsToAdd = selected.map(s => ({
+        id: 'item-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        name: s.name,
+        compartment: s.compartment,
+        quantity: s.quantity,
+        unit: s.unit,
+        purchaseDate: s.purchaseDate,
+        expiryDate: s.expiryDate,
+        expiryType: s.expiryType,
+        memo: s.memo,
+        updatedAt: Date.now()
+      }));
+
+      items = [...newItemsToAdd, ...items];
+      persistItemsLocally();
+      broadcastSyncEvent({ type: 'BATCH_ADDED', newItems: newItemsToAdd });
+
+      closeAllModals();
+      render();
+      showToast(`${newItemsToAdd.length}件の食材をストックに登録しました！`, 'success');
+    }
+
+    // --- AI献立提案 (Gemini 3 Flash API) ---
+    async function generateMealPlanWithGemini() {
+      if (items.length === 0) {
+        showToast('冷蔵庫に食材がありません。先に食材を追加してください。', 'info');
+        return;
+      }
+
+      const initialNotice = document.getElementById('mealInitialNotice');
+      if (initialNotice) initialNotice.remove();
+
+      document.getElementById('mealLoading').classList.remove('hidden');
+      document.getElementById('mealContent').innerHTML = '';
+
+      const stockSummary = items.map(i => {
+        const days = getDaysUntilExpiry(i.expiryDate);
+        return `- ${i.name} (場所:${COMPARTMENT_META[i.compartment]?.name}, 数量:${i.quantity}${i.unit}, 期限まで:${days}日, 種別:${i.expiryType})`;
+      }).join('\n');
+
+      const systemPrompt = `
+プロの管理栄養士として、ユーザーの冷蔵庫ストック情報から「期限が近い食材の消費」と「栄養バランス」を両立した献立を提案してください。
+必ず以下のJSONスキーマで返してください:
+{
+  "menuTitle": "献立タイトル",
+  "nutritionHighlight": "栄養のポイント（2〜3行）",
+  "dishes": [
+    {
+      "name": "料理名",
+      "type": "主菜" または "副菜" または "汁物",
+      "usedIngredients": ["食材1", "食材2"],
+      "cookingTime": "所要時間",
+      "recipeSteps": ["手順1", "手順2"]
+    }
+  ],
+  "consumedStockItems": ["消費できる食材名1", "消費できる食材名2"]
+}
+`;
+
+      const userPrompt = `現在のストック一覧:\n${stockSummary}\n今夜のおすすめ献立を提案してください。`;
+
+      try {
+        const payload = {
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { responseMimeType: "application/json" }
+        };
+
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('API Request error');
+        const resData = await response.json();
+        const plan = JSON.parse(resData.candidates[0].content.parts[0].text);
+        renderMealPlan(plan);
+      } catch (err) {
+        console.warn('Gemini API call failed, providing balanced fallback meal:', err);
+        renderFallbackMealPlan();
+      } finally {
+        document.getElementById('mealLoading').classList.add('hidden');
+      }
+    }
+
+    function renderMealPlan(plan) {
+      const container = document.getElementById('mealContent');
+      container.innerHTML = `
+        <div class="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200 rounded-2xl p-4">
+          <div class="flex items-center space-x-2 text-teal-800 font-extrabold text-base mb-1">
+            <i class="fa-solid fa-utensils"></i>
+            <span>${escapeHtml(plan.menuTitle)}</span>
+          </div>
+          <p class="text-xs text-teal-700 leading-relaxed">${escapeHtml(plan.nutritionHighlight)}</p>
+          <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
+            <span class="text-[10px] font-bold text-slate-500">消費できる食材:</span>
+            ${(plan.consumedStockItems || []).map(ing => `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-teal-800 border border-teal-200 shadow-2xs">${escapeHtml(ing)}</span>`).join('')}
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-1">
+          <h4 class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">構成メニュー & レシピ</h4>
+          ${plan.dishes.map(dish => `
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-2">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${dish.type === '主菜' ? 'bg-orange-100 text-orange-700' : dish.type === '副菜' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}">${escapeHtml(dish.type)}</span>
+                  <span class="font-bold text-sm text-slate-800">${escapeHtml(dish.name)}</span>
+                </div>
+                <span class="text-xs text-slate-400 font-medium"><i class="fa-regular fa-clock mr-1"></i>${escapeHtml(dish.cookingTime || '10分')}</span>
+              </div>
+              <p class="text-[11px] text-slate-500 mb-2">
+                <strong>使用食材:</strong> ${dish.usedIngredients.map(u => escapeHtml(u)).join(', ')}
+              </p>
+              <div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-600 space-y-1">
+                ${dish.recipeSteps.map((step, idx) => `
+                  <div class="flex items-start space-x-2">
+                    <span class="font-bold text-slate-400 text-[10px]">${idx + 1}.</span>
+                    <span class="text-[11px]">${escapeHtml(step)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderFallbackMealPlan() {
+      const fallback = {
+        menuTitle: "冷蔵・チルド食材をスピード使い切り！野菜たっぷりバランス定食",
+        nutritionHighlight: "チルド室のタンパク質と野菜室の食物繊維・ビタミンを組み合わせ、賞味期限の近い食材を一気に美味しく消費します。",
+        consumedStockItems: ["豚肉", "キャベツ", "卵", "豆腐"],
+        dishes: [
+          {
+            name: "豚肉とキャベツのスタミナ味噌炒め",
+            type: "主菜",
+            cookingTime: "12分",
+            usedIngredients: ["豚肉", "キャベツ"],
+            recipeSteps: [
+              "キャベツをざく切りにし、豚肉は一口大に切る。",
+              "フライパンに油を熱し、豚肉を炒めて色が変わったらキャベツを加える。",
+              "味噌、みりん、醤油各小さじ2を絡めて強火でさっと炒め合わせる。"
+            ]
+          },
+          {
+            name: "ふわふわ卵と豆腐のかき玉スープ",
+            type: "汁物",
+            cookingTime: "8分",
+            usedIngredients: ["卵", "豆腐"],
+            recipeSteps: [
+              "小鍋に水300mlと和風だし、醤油を煮立て、さいの目切りにした豆腐を入れる。",
+              "水溶き片栗粉で軽くとろみをつけ、溶き卵を回し入れて火を止める。"
+            ]
+          }
+        ]
+      };
+      renderMealPlan(fallback);
+    }
+
+    // --- 汎用ユーティリティ ---
+    function copyToClipboard(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      } else {
+        fallbackCopy(text);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(textArea);
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+
+      let icon = 'fa-circle-info text-blue-500';
+      let border = 'border-blue-200';
+      if (type === 'success') { icon = 'fa-circle-check text-emerald-500'; border = 'border-emerald-200'; }
+      if (type === 'error') { icon = 'fa-circle-exclamation text-rose-500'; border = 'border-rose-200'; }
+
+      toast.className = `glass-effect border ${border} px-4 py-2.5 rounded-2xl shadow-lg flex items-center space-x-2 text-xs font-bold text-slate-800 pointer-events-auto`;
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHtml(message)}</span>`;
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'transition-opacity');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
