@@ -47,8 +47,17 @@
       font-family: "M PLUS Rounded 1c", "Inter", sans-serif;
       min-height: 100vh;
       -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: none;
     }
     
+    /* ボタン連打時のiOS Safariによるダブルタップズーム・長押しテキスト選択を徹底抑止 */
+    button, input[type="button"], input[type="submit"], .touch-manipulation {
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
     /* iOS Safari で入力欄フォーカス時に画面が勝手にズームするのを防止（16px以上維持） */
     @media (max-width: 640px) {
       input, select, textarea {
@@ -62,7 +71,7 @@
     }
 
     .glass-effect {
-      background: rgba(255, 255, 255, 0.94);
+      background: rgba(255, 255, 255, 0.96);
       backdrop-filter: blur(14px);
     }
     
@@ -74,9 +83,15 @@
       50% { opacity: 0.8; transform: scale(1.04); }
     }
 
-    /* 横スクロールタブのスクロールバー非表示（スワイプしやすくする） */
+    /* 横スクロールタブのスクロールバー非表示 */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* モバイル入力シートのスクロールスムーズ化 */
+    .smooth-scroll-touch {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-blue-100 selection:text-blue-700">
@@ -107,13 +122,13 @@
           <i class="fa-solid fa-users text-blue-600"></i>
         </button>
 
-        <!-- デスクトップ用レシート読み取りボタン (スマホ時は下部バーにも配置) -->
+        <!-- デスクトップ用レシート読み取りボタン -->
         <button type="button" id="btnOpenReceiptModal" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs text-xs sm:text-sm font-bold active:scale-95 transition">
           <i class="fa-solid fa-receipt"></i>
           <span>レシート読取</span>
         </button>
 
-        <!-- デスクトップ用献立提案ボタン (スマホ時は下部バーにも配置) -->
+        <!-- デスクトップ用献立提案ボタン -->
         <button type="button" id="btnOpenMealModal" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-xs text-xs sm:text-sm font-bold active:scale-95 transition">
           <i class="fa-solid fa-wand-magic-sparkles"></i>
           <span>AI献立</span>
@@ -122,10 +137,10 @@
     </div>
   </header>
 
-  <!-- メインコンテンツ (スマホボトムバー分の余白 pb-24 を確保) -->
+  <!-- メインコンテンツ -->
   <main class="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 pb-28 sm:pb-8 space-y-4 sm:space-y-6">
 
-    <!-- アラート・ステータスサマリーカード（スマホでは2列×2行でコンパクトに） -->
+    <!-- アラート・ステータスサマリーカード -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
       <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex items-center space-x-2.5">
         <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-base shrink-0">
@@ -272,10 +287,10 @@
 
   <!-- ======================== モーダル群 ======================== -->
 
-  <!-- 1. アイテム追加 / 編集モーダル（スマホ対応ボトムシート/全画面） -->
-  <div id="itemModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
-      <!-- ヘッダー -->
+  <!-- 1. アイテム追加 / 編集モーダル（iOSキーボード見切れ対策：外枠overflow-hidden、1行4室セグメントUI） -->
+  <div id="itemModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+      <!-- 固定ヘッダー -->
       <div class="px-5 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
           <i class="fa-solid fa-box-archive text-base"></i>
@@ -286,31 +301,35 @@
         </button>
       </div>
 
-      <!-- フォーム（スクロール可能） -->
-      <form id="itemForm" class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 pb-safe">
+      <!-- フォーム（唯一のスクロールコンテナ・iPhone対応で十分な下部パディングを確保） -->
+      <form id="itemForm" class="p-4 sm:p-5 space-y-3.5 overflow-y-auto flex-1 overscroll-contain pb-32 smooth-scroll-touch">
         <input type="hidden" id="itemId">
 
-        <!-- 保管場所（室別選択：大きなボタングリッド） -->
+        <!-- 保管場所（省スペースな1行4室セグメント：キーボード表示時でも見切れない） -->
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1.5">
             <i class="fa-solid fa-door-closed text-blue-500 mr-1"></i>保管場所（冷蔵庫各室）
           </label>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl p-3 flex items-center space-x-2.5 hover:bg-blue-50/50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:text-blue-700 transition">
-              <input type="radio" name="itemCompartment" value="fridge" class="w-4 h-4 text-blue-600" checked>
-              <span class="text-xs font-extrabold flex items-center"><i class="fa-solid fa-snowflake text-blue-500 mr-1.5 text-sm"></i>冷蔵室</span>
+          <div class="grid grid-cols-4 gap-1.5">
+            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-blue-50/50 has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50 has-[:checked]:text-blue-700 transition flex flex-col items-center justify-center">
+              <input type="radio" name="itemCompartment" value="fridge" class="sr-only" checked>
+              <i class="fa-solid fa-snowflake text-blue-500 text-sm mb-0.5"></i>
+              <span class="text-[11px] font-extrabold">冷蔵室</span>
             </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl p-3 flex items-center space-x-2.5 hover:bg-cyan-50/50 has-[:checked]:border-cyan-600 has-[:checked]:bg-cyan-50 has-[:checked]:text-cyan-700 transition">
-              <input type="radio" name="itemCompartment" value="chilled" class="w-4 h-4 text-cyan-600">
-              <span class="text-xs font-extrabold flex items-center"><i class="fa-solid fa-icicles text-cyan-500 mr-1.5 text-sm"></i>チルド室</span>
+            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-cyan-50/50 has-[:checked]:border-cyan-600 has-[:checked]:bg-cyan-50 has-[:checked]:text-cyan-700 transition flex flex-col items-center justify-center">
+              <input type="radio" name="itemCompartment" value="chilled" class="sr-only">
+              <i class="fa-solid fa-icicles text-cyan-500 text-sm mb-0.5"></i>
+              <span class="text-[11px] font-extrabold">チルド</span>
             </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl p-3 flex items-center space-x-2.5 hover:bg-emerald-50/50 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-700 transition">
-              <input type="radio" name="itemCompartment" value="vegetable" class="w-4 h-4 text-emerald-600">
-              <span class="text-xs font-extrabold flex items-center"><i class="fa-solid fa-carrot text-emerald-500 mr-1.5 text-sm"></i>野菜室</span>
+            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-emerald-50/50 has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50 has-[:checked]:text-emerald-700 transition flex flex-col items-center justify-center">
+              <input type="radio" name="itemCompartment" value="vegetable" class="sr-only">
+              <i class="fa-solid fa-carrot text-emerald-500 text-sm mb-0.5"></i>
+              <span class="text-[11px] font-extrabold">野菜室</span>
             </label>
-            <label class="cursor-pointer border-2 border-slate-200 rounded-xl p-3 flex items-center space-x-2.5 hover:bg-purple-50/50 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 has-[:checked]:text-purple-700 transition">
-              <input type="radio" name="itemCompartment" value="freezer" class="w-4 h-4 text-purple-600">
-              <span class="text-xs font-extrabold flex items-center"><i class="fa-solid fa-cube text-purple-500 mr-1.5 text-sm"></i>冷凍庫</span>
+            <label class="cursor-pointer border-2 border-slate-200 rounded-xl py-2 px-1 text-center hover:bg-purple-50/50 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 has-[:checked]:text-purple-700 transition flex flex-col items-center justify-center">
+              <input type="radio" name="itemCompartment" value="freezer" class="sr-only">
+              <i class="fa-solid fa-cube text-purple-500 text-sm mb-0.5"></i>
+              <span class="text-[11px] font-extrabold">冷凍庫</span>
             </label>
           </div>
         </div>
@@ -320,23 +339,23 @@
           <label class="block text-xs font-bold text-slate-700 mb-1">
             <i class="fa-solid fa-tag text-blue-500 mr-1"></i>品目名 <span class="text-rose-500">*</span>
           </label>
-          <input type="text" id="itemName" required placeholder="例: 卵、牛乳、鶏もも肉、豆腐" class="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+          <input type="text" id="itemName" required placeholder="例: 卵、牛乳、鶏もも肉、豆腐" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
         </div>
 
         <!-- 数量と単位（スマホで押しやすい大型ステッパー付き） -->
-        <div class="space-y-2">
+        <div class="space-y-1.5">
           <label class="block text-xs font-bold text-slate-700">
             <i class="fa-solid fa-scale-balanced text-blue-500 mr-1"></i>数量 & 単位
           </label>
           <div class="grid grid-cols-5 gap-2 items-center">
             <!-- 数量ステッパー (3カラム) -->
             <div class="col-span-3 flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-1">
-              <button type="button" id="btnModalQtyMinus" class="w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
-                <i class="fa-solid fa-minus"></i>
+              <button type="button" id="btnModalQtyMinus" class="touch-manipulation w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
+                <i class="fa-solid fa-minus pointer-events-none"></i>
               </button>
               <input type="number" id="itemQuantity" step="any" min="0" value="1" required class="flex-1 text-center bg-transparent border-0 font-extrabold text-base focus:ring-0">
-              <button type="button" id="btnModalQtyPlus" class="w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
-                <i class="fa-solid fa-plus"></i>
+              <button type="button" id="btnModalQtyPlus" class="touch-manipulation w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center justify-center font-bold text-base active:scale-95 transition">
+                <i class="fa-solid fa-plus pointer-events-none"></i>
               </button>
             </div>
 
@@ -365,21 +384,21 @@
           <!-- 頻出単位クイックタップチップ -->
           <div class="flex flex-wrap gap-1.5 pt-1">
             <span class="text-[11px] text-slate-400 self-center mr-1">クイック:</span>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="個">個</button>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="g">g</button>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="パック">パック</button>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="本">本</button>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="袋">袋</button>
-            <button type="button" class="unit-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="丁">丁</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="個">個</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="g">g</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="パック">パック</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="本">本</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="袋">袋</button>
+            <button type="button" class="unit-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition" data-unit="丁">丁</button>
           </div>
         </div>
 
-        <!-- 賞味/消費期限（過去・未来対応 ＋ スマホ用ワンタップクイックボタン） -->
-        <div class="space-y-2">
+        <!-- 賞味/消費期限 -->
+        <div class="space-y-1.5">
           <div class="grid grid-cols-3 gap-2">
             <div class="col-span-1">
               <label class="block text-xs font-bold text-slate-700 mb-1">期限種別</label>
-              <select id="itemExpiryType" class="w-full px-2 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select id="itemExpiryType" class="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="賞味期限">賞味期限</option>
                 <option value="消費期限">消費期限</option>
               </select>
@@ -394,25 +413,25 @@
 
           <!-- スマホ用賞味期限クイック選択ボタン -->
           <div class="flex flex-wrap gap-1.5">
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="1">明日</button>
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="3">3日後</button>
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="5">5日後</button>
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="7">1週間後</button>
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="14">2週間後</button>
-            <button type="button" class="expiry-chip px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="30">1ヶ月後</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="1">明日</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="3">3日後</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="5">5日後</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="7">1週間後</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="14">2週間後</button>
+            <button type="button" class="expiry-chip touch-manipulation px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 active:scale-95 transition" data-offset="30">1ヶ月後</button>
           </div>
         </div>
 
-        <!-- 購入日（過去・未来設定可能 ＋ クイックボタン） -->
-        <div class="space-y-1.5">
+        <!-- 購入日 -->
+        <div class="space-y-1">
           <div class="flex items-center justify-between">
             <label class="block text-xs font-bold text-slate-700">
               <i class="fa-regular fa-calendar-check text-blue-500 mr-1"></i>購入日
             </label>
             <div class="flex gap-1">
-              <button type="button" class="purchase-chip px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="0">今日</button>
-              <button type="button" class="purchase-chip px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-1">昨日</button>
-              <button type="button" class="purchase-chip px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-2">おととい</button>
+              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="0">今日</button>
+              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-1">昨日</button>
+              <button type="button" class="purchase-chip touch-manipulation px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 hover:bg-slate-200" data-offset="-2">おととい</button>
             </div>
           </div>
           <input type="date" id="itemPurchaseDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -426,12 +445,12 @@
           <input type="text" id="itemMemo" placeholder="例: 開封済み、特売品、半額" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
 
-        <!-- アクションボタン（スマホで親指で押しやすい全幅スタイル） -->
-        <div class="pt-3 flex gap-2">
-          <button type="button" class="btn-close-modal flex-1 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">
+        <!-- アクションボタン -->
+        <div class="pt-2 flex gap-2">
+          <button type="button" class="btn-close-modal touch-manipulation flex-1 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition">
             キャンセル
           </button>
-          <button type="submit" class="flex-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-extrabold shadow-md shadow-blue-500/25 active:scale-95 transition">
+          <button type="submit" class="touch-manipulation flex-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-extrabold shadow-md shadow-blue-500/25 active:scale-95 transition">
             保存する
           </button>
         </div>
@@ -439,9 +458,9 @@
     </div>
   </div>
 
-  <!-- 2. レシート読み取りモーダル (スマホカメラ直接起動対応) -->
-  <div id="receiptModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+  <!-- 2. レシート読み取りモーダル -->
+  <div id="receiptModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
       <!-- ヘッダー -->
       <div class="px-5 py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
@@ -459,7 +478,6 @@
       <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 pb-safe">
         <!-- アップロード & スマホカメラ起動エリア -->
         <div id="receiptDropZone" class="border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 rounded-2xl p-6 text-center transition">
-          <!-- スマホカメラ直接起動用 input (capture=environment) -->
           <input type="file" id="receiptFileInput" accept="image/*" capture="environment" class="hidden">
           <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-3xl mx-auto mb-3 shadow-inner">
             <i class="fa-solid fa-camera"></i>
@@ -468,11 +486,11 @@
           <p class="text-xs text-slate-500 mt-1">日用品や雑貨をAIが自動除外します</p>
 
           <div class="mt-4 flex flex-col sm:flex-row justify-center gap-2">
-            <button type="button" id="btnSelectFile" class="w-full sm:w-auto px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-amber-500/25 active:scale-95 transition flex items-center justify-center space-x-2">
-              <i class="fa-solid fa-camera"></i>
+            <button type="button" id="btnSelectFile" class="touch-manipulation w-full sm:w-auto px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-amber-500/25 active:scale-95 transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-camera pointer-events-none"></i>
               <span>カメラで撮影 / 画像選択</span>
             </button>
-            <button type="button" id="btnTestReceipt" class="w-full sm:w-auto px-3 py-2.5 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl text-xs font-bold transition">
+            <button type="button" id="btnTestReceipt" class="touch-manipulation w-full sm:w-auto px-3 py-2.5 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl text-xs font-bold transition">
               テスト用ダミー読込
             </button>
           </div>
@@ -506,10 +524,10 @@
 
           <!-- 登録ボタン -->
           <div class="flex items-center justify-end space-x-2 pt-2">
-            <button type="button" id="btnCancelReceipt" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">
+            <button type="button" id="btnCancelReceipt" class="touch-manipulation px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">
               やり直す
             </button>
-            <button type="button" id="btnAddAllDetectedItems" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/25 transition">
+            <button type="button" id="btnAddAllDetectedItems" class="touch-manipulation px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-500/25 transition">
               選択した食材を登録する
             </button>
           </div>
@@ -518,9 +536,9 @@
     </div>
   </div>
 
-  <!-- 3. AI献立提案モーダル (Gemini Flash) -->
-  <div id="mealModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+  <!-- 3. AI献立提案モーダル -->
+  <div id="mealModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
       <!-- ヘッダー -->
       <div class="px-5 py-3.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
@@ -542,8 +560,8 @@
             <p class="font-bold">現在のストック状況から献立を考案します</p>
             <p class="text-teal-700 text-[11px] mt-0.5">主菜・副菜・汁物を組み合わせ、食品ロスをゼロへ！</p>
           </div>
-          <button type="button" id="btnGenerateMealPlan" class="w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 flex items-center justify-center space-x-1.5 active:scale-95 transition cursor-pointer">
-            <i class="fa-solid fa-rotate-right"></i>
+          <button type="button" id="btnGenerateMealPlan" class="touch-manipulation w-full sm:w-auto px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/20 flex items-center justify-center space-x-1.5 active:scale-95 transition cursor-pointer">
+            <i class="fa-solid fa-rotate-right pointer-events-none"></i>
             <span>献立を生成する</span>
           </button>
         </div>
@@ -557,12 +575,10 @@
 
         <!-- 献立提案結果コンテナ -->
         <div id="mealResultContainer" class="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-          <!-- 初回案内表示 -->
           <div id="mealInitialNotice" class="text-center py-10 text-slate-400">
             <i class="fa-solid fa-utensils text-4xl mb-3 text-slate-300"></i>
             <p class="text-sm font-medium">上の「献立を生成する」ボタンを押すと、<br>AIが現在の在庫をチェックしておすすめの献立を作ります。</p>
           </div>
-          <!-- 動的挿入カード -->
           <div id="mealContent" class="space-y-4"></div>
         </div>
       </div>
@@ -570,8 +586,8 @@
   </div>
 
   <!-- 4. リアルタイム共有・同期モーダル -->
-  <div id="shareModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+  <div id="shareModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex-col justify-end sm:justify-center items-center overflow-hidden">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 h-[90dvh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
       <!-- ヘッダー -->
       <div class="px-5 py-3.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 text-white flex items-center justify-between shrink-0">
         <div class="flex items-center space-x-2">
@@ -596,8 +612,8 @@
           <label class="block text-xs font-bold text-slate-700 mb-1">現在の共有ルームID</label>
           <div class="flex items-center space-x-2">
             <input type="text" id="inputRoomId" readonly class="flex-1 px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 select-all">
-            <button type="button" id="btnCopyShareUrl" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer active:scale-95">
-              <i class="fa-solid fa-copy"></i>
+            <button type="button" id="btnCopyShareUrl" class="touch-manipulation px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer active:scale-95">
+              <i class="fa-solid fa-copy pointer-events-none"></i>
               <span>URLコピー</span>
             </button>
           </div>
@@ -615,7 +631,7 @@
           <label class="block text-xs font-bold text-slate-700 mb-1">他のルームIDに参加する</label>
           <div class="flex space-x-2">
             <input type="text" id="inputJoinRoomId" placeholder="例: stockpal-xxxx" class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <button type="button" id="btnJoinRoom" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer active:scale-95">
+            <button type="button" id="btnJoinRoom" class="touch-manipulation px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer active:scale-95">
               参加
             </button>
           </div>
@@ -624,18 +640,14 @@
     </div>
   </div>
 
-  <!-- トースト通知コンテナ (スマホボトムバーの上部に表示) -->
-  <div id="toastContainer" class="fixed bottom-20 sm:bottom-5 right-4 left-4 sm:left-auto z-50 flex flex-col space-y-2 pointer-events-none"></div>
+  <!-- 小型カプセルトースト通知コンテナ（上部中央配置・常時最大1件のみ・画面を覆わない） -->
+  <div id="toastContainer" class="fixed top-4 inset-x-0 mx-auto max-w-xs z-50 flex flex-col items-center pointer-events-none px-4"></div>
 
   <!-- ======================== アプリケーションスクリプト ======================== -->
   <script>
-    /**
-     * StockPal メインスクリプト
-     * すべての操作関数を完全実装し、グローバル公開＆重複排除
-     */
-
-    const API_KEY = ""; // Canvas環境で自動注入。直接利用時は任意設定可能
+    const API_KEY = "";
     const LOCAL_STORAGE_KEY = 'stockpal_items_v1';
+    const pageStartTime = Date.now(); // 起動前の古いSSEメッセージを無視するための基準時刻
     
     const COMPARTMENT_META = {
       fridge: { name: '冷蔵室', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: 'fa-snowflake', border: 'border-l-blue-500' },
@@ -644,7 +656,6 @@
       freezer: { name: '冷凍庫', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: 'fa-cube', border: 'border-l-purple-500' }
     };
 
-    // 初期サンプルデータ用日付生成
     function getRelativeDate(offsetDays) {
       const d = new Date();
       d.setDate(d.getDate() + offsetDays);
@@ -659,7 +670,6 @@
       { id: 'item-5', name: '冷凍讃岐うどん', compartment: 'freezer', quantity: 3, unit: '玉', purchaseDate: getRelativeDate(-10), expiryDate: getRelativeDate(60), expiryType: '賞味期限', memo: 'ストック用', updatedAt: Date.now() }
     ];
 
-    // アプリケーション状態
     let items = [];
     let currentFilterCompartment = 'all';
     let searchQuery = '';
@@ -668,6 +678,10 @@
     let sseEventSource = null;
     let clientId = 'client-' + Math.random().toString(36).substring(2, 9);
     let detectedReceiptItems = [];
+
+    // 通知バッチ・間引き用タイマー
+    let syncNotificationTimer = null;
+    let syncUpdateCount = 0;
 
     function formatDate(dateStr) {
       if (!dateStr) return '-';
@@ -684,7 +698,7 @@
       return Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
     }
 
-    // --- ストレージ同期 ---
+    // --- ストレージ保持 ---
     function loadSavedItems() {
       try {
         const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -706,7 +720,36 @@
       }
     }
 
-    // --- 初期化エントリーポイント ---
+    // --- iOS Safariのダブルタップ・マルチタップズーム防止 ---
+    (function setupIosZoomPrevention() {
+      let lastTouchTime = 0;
+
+      // ボタン連打時のダブルタップズームを完全にブロック
+      document.addEventListener('touchend', function (e) {
+        const btn = e.target.closest('button, .touch-manipulation, input[type="button"]');
+        if (btn) {
+          const now = Date.now();
+          if (now - lastTouchTime <= 350) {
+            e.preventDefault(); // Safariのズーム発火を防止
+            btn.click(); // preventDefaultによるクリック抑止を回避して確実に発火
+          }
+          lastTouchTime = now;
+        }
+      }, { passive: false });
+
+      // 操作系でのマルチタッチ・ピンチジェスチャーの抑止
+      document.addEventListener('touchstart', function (e) {
+        if (e.touches.length > 1 && e.target.closest('button, input, select, .touch-manipulation')) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+      }, { passive: false });
+    })();
+
+    // --- 初期化 ---
     function initApp() {
       try {
         initRoom();
@@ -727,7 +770,6 @@
       initApp();
     }
 
-    // --- ルーム設定 & 共有初期化 ---
     function initRoom() {
       let roomId = '';
       try {
@@ -764,7 +806,7 @@
       } catch (e) {}
     }
 
-    // --- HTTPS SSE & Fetch API ベースのリアルタイム同期 ---
+    // --- HTTPS SSE リアルタイム同期（過去ログの通知スパム防止対策） ---
     function connectSyncEngine() {
       if (sseEventSource) {
         try { sseEventSource.close(); } catch(e){}
@@ -772,7 +814,8 @@
 
       const syncIndicator = document.getElementById('syncIndicator');
       const syncStatusText = document.getElementById('syncStatusText');
-      const topicUrl = `https://ntfy.sh/${currentRoomId}/sse`;
+      // ?since=latest を付与して過去ログの再送を抑制
+      const topicUrl = `https://ntfy.sh/${currentRoomId}/sse?since=latest`;
 
       try {
         sseEventSource = new EventSource(topicUrl);
@@ -789,6 +832,12 @@
             if (!data.message) return;
             const payload = JSON.parse(data.message);
             if (payload.sender === clientId) return;
+
+            // ページ起動前に送信された過去メッセージであれば無視
+            if (payload.timestamp && payload.timestamp < pageStartTime - 2000) {
+              return;
+            }
+
             handleIncomingSync(payload);
           } catch (e) {}
         };
@@ -816,6 +865,19 @@
       } catch (e) {}
     }
 
+    function queueSyncToast(label) {
+      syncUpdateCount++;
+      clearTimeout(syncNotificationTimer);
+      syncNotificationTimer = setTimeout(() => {
+        if (syncUpdateCount === 1) {
+          showToast(label, 'info');
+        } else if (syncUpdateCount > 1) {
+          showToast(`${syncUpdateCount}件のストックが同期されました`, 'info');
+        }
+        syncUpdateCount = 0;
+      }, 500);
+    }
+
     function handleIncomingSync(payload) {
       switch (payload.type) {
         case 'REQ_SYNC':
@@ -826,7 +888,6 @@
             items = payload.items;
             persistItemsLocally();
             render();
-            showToast('家族の最新ストックと同期しました', 'info');
           }
           break;
         case 'ITEM_ADDED':
@@ -834,7 +895,7 @@
             items.unshift(payload.item);
             persistItemsLocally();
             render();
-            showToast(`追加されました: ${payload.item.name}`, 'info');
+            queueSyncToast(`追加: ${payload.item.name}`);
           }
           break;
         case 'ITEM_UPDATED':
@@ -843,21 +904,21 @@
             items[idx] = payload.item;
             persistItemsLocally();
             render();
-            showToast(`更新されました: ${payload.item.name}`, 'info');
+            queueSyncToast(`更新: ${payload.item.name}`);
           }
           break;
         case 'ITEM_DELETED':
           items = items.filter(i => i.id !== payload.id);
           persistItemsLocally();
           render();
-          showToast('アイテムが消費・削除されました', 'info');
+          queueSyncToast('食材を使い切りました');
           break;
         case 'BATCH_ADDED':
           if (Array.isArray(payload.newItems)) {
             items = [...payload.newItems, ...items];
             persistItemsLocally();
             render();
-            showToast(`${payload.newItems.length}件のストックが同期されました`, 'success');
+            queueSyncToast(`${payload.newItems.length}件の食材を追加`);
           }
           break;
       }
@@ -871,10 +932,10 @@
       });
     }
 
-    // 1. アイテム追加/編集モーダルを開く
     function openItemModal(itemId = null) {
+      const modal = document.getElementById('itemModal');
       const form = document.getElementById('itemForm');
-      if (!form) return;
+      if (!modal || !form) return;
       form.reset();
 
       const titleEl = document.getElementById('itemModalTitle');
@@ -913,14 +974,18 @@
         document.getElementById('itemMemo').value = '';
       }
 
-      const modal = document.getElementById('itemModal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // iPhoneでキーボード立ち上がり時でも「保管場所」が見切れないようスクロール位置を最上部に固定
+      form.scrollTop = 0;
+      modal.scrollTop = 0;
+      setTimeout(() => {
+        form.scrollTop = 0;
+        modal.scrollTop = 0;
+      }, 50);
     }
 
-    // 2. フォームからアイテム保存
     function saveItemFromForm() {
       const idInput = document.getElementById('itemId');
       const editId = idInput ? idInput.value.trim() : '';
@@ -987,7 +1052,6 @@
       render();
     }
 
-    // 3. 食材の数量増減ボタン (+/-)
     function changeQuantity(itemId, delta) {
       const item = items.find(i => i.id === itemId);
       if (!item) return;
@@ -1001,16 +1065,13 @@
       render();
       broadcastSyncEvent({ type: 'ITEM_UPDATED', item });
     }
-    // グローバルから呼べるよう明示バインド
     window.changeQuantity = changeQuantity;
 
-    // 4. 食材の編集ボタン
     function editItem(itemId) {
       openItemModal(itemId);
     }
     window.editItem = editItem;
 
-    // 5. 食材の使い切ったボタン
     function consumeItem(itemId) {
       const item = items.find(i => i.id === itemId);
       const name = item ? item.name : '食材';
@@ -1023,7 +1084,6 @@
     }
     window.consumeItem = consumeItem;
 
-    // 6. 一覧ボタン（ナビゲーション）
     function navigateHome() {
       closeAllModals();
 
@@ -1048,7 +1108,6 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // 7. レシートモーダルのリセット
     function resetReceiptModal() {
       const dropZone = document.getElementById('receiptDropZone');
       const scanningView = document.getElementById('receiptScanningView');
@@ -1063,7 +1122,6 @@
       detectedReceiptItems = [];
     }
 
-    // 8. レシート画像の読み込み処理
     async function handleReceiptFile(file) {
       if (!file) return;
 
@@ -1076,7 +1134,7 @@
         const base64Data = await fileToBase64(file);
         await analyzeReceiptWithGemini(base64Data, file.type || 'image/jpeg');
       } catch (err) {
-        console.warn('レシート解析API処理中に通知、テスト用解析で補完します:', err);
+        console.warn('API処理の代替としてシミュレーションを実行します:', err);
         simulateReceiptScanning();
       }
     }
@@ -1200,23 +1258,23 @@
           </div>
         </div>
 
-        <!-- 操作ボタン群（増減・編集・使い切り） -->
+        <!-- 操作ボタン群（増減・編集・使い切り：連打ズーム抑止クラス付き） -->
         <div class="flex items-center justify-between pt-2 border-t border-slate-100 gap-1">
           <div class="flex items-center space-x-1.5">
-            <button type="button" onclick="changeQuantity('${item.id}', -1)" title="1つ減らす" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
-              <i class="fa-solid fa-minus"></i>
+            <button type="button" onclick="changeQuantity('${item.id}', -1)" title="1つ減らす" class="touch-manipulation w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
+              <i class="fa-solid fa-minus pointer-events-none"></i>
             </button>
-            <button type="button" onclick="changeQuantity('${item.id}', 1)" title="1つ増やす" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
-              <i class="fa-solid fa-plus"></i>
+            <button type="button" onclick="changeQuantity('${item.id}', 1)" title="1つ増やす" class="touch-manipulation w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 flex items-center justify-center text-sm font-bold transition cursor-pointer">
+              <i class="fa-solid fa-plus pointer-events-none"></i>
             </button>
           </div>
 
           <div class="flex items-center space-x-1">
-            <button type="button" onclick="editItem('${item.id}')" title="編集" class="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition cursor-pointer">
-              <i class="fa-solid fa-pen-to-square mr-1"></i>編集
+            <button type="button" onclick="editItem('${item.id}')" title="編集" class="touch-manipulation px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition cursor-pointer">
+              <i class="fa-solid fa-pen-to-square mr-1 pointer-events-none"></i>編集
             </button>
-            <button type="button" onclick="consumeItem('${item.id}')" title="使い切った（削除）" class="px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200 transition cursor-pointer">
-              <i class="fa-solid fa-check mr-1"></i>使い切った
+            <button type="button" onclick="consumeItem('${item.id}')" title="使い切った（削除）" class="touch-manipulation px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200 transition cursor-pointer">
+              <i class="fa-solid fa-check mr-1 pointer-events-none"></i>使い切った
             </button>
           </div>
         </div>
@@ -1244,14 +1302,10 @@
 
       // 2. モバイル下部固定ナビゲーションバー
       const btnNavHome = document.getElementById('btnNavHome');
-      if (btnNavHome) {
-        btnNavHome.addEventListener('click', navigateHome);
-      }
+      if (btnNavHome) btnNavHome.addEventListener('click', navigateHome);
 
       const btnNavAdd = document.getElementById('btnNavAdd');
-      if (btnNavAdd) {
-        btnNavAdd.addEventListener('click', () => openItemModal());
-      }
+      if (btnNavAdd) btnNavAdd.addEventListener('click', () => openItemModal());
 
       const btnNavReceipt = document.getElementById('btnNavReceipt');
       if (btnNavReceipt) {
@@ -1289,14 +1343,10 @@
 
       // 3. デスクトップ＆汎用追加ボタン
       const btnOpenAdd = document.getElementById('btnOpenAddModal');
-      if (btnOpenAdd) {
-        btnOpenAdd.addEventListener('click', () => openItemModal());
-      }
+      if (btnOpenAdd) btnOpenAdd.addEventListener('click', () => openItemModal());
 
       const btnEmptyAdd = document.getElementById('btnEmptyAdd');
-      if (btnEmptyAdd) {
-        btnEmptyAdd.addEventListener('click', () => openItemModal());
-      }
+      if (btnEmptyAdd) btnEmptyAdd.addEventListener('click', () => openItemModal());
 
       // 4. レシートモーダルを開くボタン
       const btnOpenReceipt = document.getElementById('btnOpenReceiptModal');
@@ -1395,6 +1445,14 @@
           e.preventDefault();
           saveItemFromForm();
         });
+
+        // iPhoneキーボード出現時に外枠スクロールが発生しないようガード
+        itemForm.querySelectorAll('input, select').forEach(input => {
+          input.addEventListener('focus', () => {
+            const modal = document.getElementById('itemModal');
+            if (modal) modal.scrollTop = 0;
+          });
+        });
       }
 
       // 12. レシート撮影・ファイル選択
@@ -1457,7 +1515,7 @@
         btnCopy.addEventListener('click', () => {
           const shareUrl = `${window.location.origin}${window.location.pathname}#room=${currentRoomId}`;
           copyToClipboard(shareUrl);
-          showToast('共有リンクをクリップボードにコピーしました！', 'success');
+          showToast('共有リンクをコピーしました', 'success');
         });
       }
 
@@ -1652,7 +1710,7 @@
 
       closeAllModals();
       render();
-      showToast(`${newItemsToAdd.length}件の食材をストックに登録しました！`, 'success');
+      showToast(`${newItemsToAdd.length}件の食材を登録しました！`, 'success');
     }
 
     // --- AI献立提案 (Gemini 3 Flash API) ---
@@ -1815,9 +1873,14 @@
       document.body.removeChild(textArea);
     }
 
+    // 小型カプセルトースト（画面を覆わず常時最大1件のみ上部表示）
     function showToast(message, type = 'info') {
       const container = document.getElementById('toastContainer');
       if (!container) return;
+
+      // 画面を埋め尽くさないよう既存の通知を即時クリア
+      container.innerHTML = '';
+
       const toast = document.createElement('div');
 
       let icon = 'fa-circle-info text-blue-500';
@@ -1825,14 +1888,14 @@
       if (type === 'success') { icon = 'fa-circle-check text-emerald-500'; border = 'border-emerald-200'; }
       if (type === 'error') { icon = 'fa-circle-exclamation text-rose-500'; border = 'border-rose-200'; }
 
-      toast.className = `glass-effect border ${border} px-4 py-2.5 rounded-2xl shadow-lg flex items-center space-x-2 text-xs font-bold text-slate-800 pointer-events-auto`;
-      toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHtml(message)}</span>`;
+      toast.className = `glass-effect border ${border} px-3.5 py-1.5 rounded-full shadow-md flex items-center space-x-2 text-[11px] font-bold text-slate-800 pointer-events-auto transition-all duration-200 animate-in fade-in slide-in-from-top-2`;
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i><span class="truncate max-w-[200px]">${escapeHtml(message)}</span>`;
 
       container.appendChild(toast);
       setTimeout(() => {
-        toast.classList.add('opacity-0', 'transition-opacity');
-        setTimeout(() => toast.remove(), 300);
-      }, 3500);
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 200);
+      }, 2000);
     }
 
     function escapeHtml(str) {
